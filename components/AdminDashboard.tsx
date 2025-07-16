@@ -7,7 +7,9 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Dialog } from '@headlessui/react';
 
-const ADMIN_EMAILS = ['admin@your-company.com'];
+const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
+  'nitishjain0109@gmail.com',
+  'neetu@panachegreen.com'];
 
 export default function AdminDashboard() {
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -18,6 +20,8 @@ export default function AdminDashboard() {
   const [previewExpense, setPreviewExpense] = useState<any | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [remarksDraft, setRemarksDraft] = useState<Record<string, string>>({});
+  const [paidDraft, setPaidDraft] = useState<Record<string, string>>({});
+  const [lockedExpenses, setLockedExpenses] = useState<Record<string, boolean>>({});
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -74,6 +78,24 @@ export default function AdminDashboard() {
     setPreviewExpense(null);
   };
 
+  const handlePaidDraftChange = (id: string, value: string) => {
+    setPaidDraft((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handlePaidSave = async (id: string, total: number) => {
+    if (paidDraft[id] !== undefined) {
+      await updateDoc(doc(db, 'expenses', id), { paid: paidDraft[id] });
+      fetchExpenses();
+    }
+  };
+
+  const handleCloseExpense = async (id: string) => {
+    const now = new Date().toLocaleString();
+    await updateDoc(doc(db, 'expenses', id), { paidDate: now, locked: true });
+    setLockedExpenses((prev) => ({ ...prev, [id]: true }));
+    fetchExpenses();
+  };
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
 
@@ -112,6 +134,14 @@ export default function AdminDashboard() {
     saveAs(blob, `master_expenses.xlsx`);
   };
 
+  // Sort expenses: open first, closed (locked) at the bottom
+  const sortedExpenses = [...expenses].sort((a, b) => {
+    const aLocked = a.locked || lockedExpenses[a.id];
+    const bLocked = b.locked || lockedExpenses[b.id];
+    if (aLocked === bLocked) return 0;
+    return aLocked ? 1 : -1;
+  });
+
   return (
     <Card className="mt-6">
       <div className="flex gap-4 mb-4">
@@ -134,51 +164,88 @@ export default function AdminDashboard() {
         <Button onClick={fetchExpenses}>Refresh</Button>
         <Button onClick={handleDownloadMasterExcel} className="bg-green-600 hover:bg-green-700">Open in Excel</Button>
       </div>
-      <table className="min-w-full text-sm">
+      <table className="min-w-full text-sm border-separate border-spacing-y-2">
         <thead>
-          <tr>
-            <th>Name</th>
-            <th>Department</th>
-            <th>Month</th>
-            <th>Total</th>
-            <th>Paid</th>
-            <th>Balance</th>
-            <th>Status</th>
-            <th>Paid Date</th>
-            <th>Remarks</th>
-            <th>Actions</th>
+          <tr className="bg-gray-100 dark:bg-gray-800">
+            <th className="px-4 py-2 text-left">Name</th>
+            <th className="px-4 py-2 text-left">Department</th>
+            <th className="px-4 py-2 text-left">Date Added</th>
+            <th className="px-4 py-2 text-right">Total</th>
+            <th className="px-4 py-2 text-right">Paid</th>
+            <th className="px-4 py-2 text-right">Balance</th>
+            <th className="px-4 py-2 text-center">Status</th>
+            <th className="px-4 py-2 text-center">Paid Date</th>
+            <th className="px-4 py-2 text-center">Remarks</th>
+            <th className="px-4 py-2 text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {expenses.map(exp => (
-            <tr key={exp.id}>
-              <td>{exp.user?.name}</td>
-              <td>{exp.user?.department || '-'}</td>
-              <td>{exp.date?.slice(0, 7)}</td>
-              <td>₹{exp.total}</td>
-              <td>{exp.paid || '-'}</td>
-              <td>{exp.balance || '-'}</td>
-              <td>
-                <select value={exp.status || 'Under Review'} onChange={e => handleStatusChange(exp.id, e.target.value)}>
-                  <option value="Approve">Approve</option>
-                  <option value="Reject">Reject</option>
-                  <option value="Under Review">Under Review</option>
-                </select>
-              </td>
-              <td>{exp.paidDate || '-'}</td>
-              <td>
-                <Input
-                  value={remarksDraft[exp.id] !== undefined ? remarksDraft[exp.id] : (exp.remarks || '')}
-                  onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
-                  onBlur={() => handleRemarksBlur(exp.id)}
-                  label="Remarks"
-                />
-              </td>
-              <td>
-                <button onClick={() => handlePreview(exp)} className="text-blue-600 underline mr-2">Preview</button>
-              </td>
-            </tr>
-          ))}
+          {sortedExpenses.map((exp, idx) => {
+            const isLocked = exp.locked || lockedExpenses[exp.id];
+            return (
+              <tr
+                key={exp.id}
+                className={
+                  `${isLocked ? 'opacity-50 pointer-events-none' : ''} ` +
+                  (idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800')
+                }
+              >
+                <td className="px-4 py-2 align-top">{exp.user?.name}</td>
+                <td className="px-4 py-2 align-top">{exp.user?.department || '-'}</td>
+                <td className="px-4 py-2 align-top">{exp.createdAt?.toDate ? exp.createdAt.toDate().toLocaleString() : '-'}</td>
+                <td className="px-4 py-2 align-top text-right">₹{exp.total}</td>
+                <td className="px-4 py-2 align-top text-right">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={paidDraft[exp.id] !== undefined ? paidDraft[exp.id] : (exp.paid || '')}
+                      onChange={e => handlePaidDraftChange(exp.id, e.target.value)}
+                      label=""
+                      min="0"
+                      disabled={isLocked}
+                    />
+                    <Button type="button" className="bg-blue-600 px-2 py-1" onClick={() => handlePaidSave(exp.id, exp.total)} disabled={isLocked}>Save</Button>
+                  </div>
+                </td>
+                <td className="px-4 py-2 align-top text-right">{(exp.total || 0) - (Number(exp.paid) || 0)}</td>
+                <td className="px-4 py-2 align-top text-center">
+                  <select
+                    value={exp.status || 'Under Review'}
+                    onChange={e => handleStatusChange(exp.id, e.target.value)}
+                    disabled={isLocked}
+                    className={
+                      `px-2 py-1 rounded border transition-colors ` +
+                      (exp.status === 'Reject'
+                        ? 'bg-red-600 text-white border-red-700'
+                        : exp.status === 'Approve'
+                        ? 'bg-green-400 text-black border-green-600'
+                        : 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-gray-300')
+                    }
+                  >
+                    <option value="Approve" className="bg-green-400 text-black">Approve</option>
+                    <option value="Reject" className="bg-red-600 text-white">Reject</option>
+                    <option value="Under Review">Under Review</option>
+                  </select>
+                </td>
+                <td className="px-4 py-2 align-top text-center">{exp.paidDate || '-'}</td>
+                <td className="px-4 py-2 align-top text-center">
+                  <Input
+                    value={remarksDraft[exp.id] !== undefined ? remarksDraft[exp.id] : (exp.remarks || '')}
+                    onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                    onBlur={() => handleRemarksBlur(exp.id)}
+                    label="Remarks"
+                    disabled={isLocked}
+                  />
+                </td>
+                <td className="px-4 py-2 align-top text-center">
+                  <button onClick={() => handlePreview(exp)} className="text-blue-600 underline mr-2" disabled={isLocked}>Preview</button>
+                  <Button type="button" className="bg-gray-600 px-2 py-1" onClick={() => handleCloseExpense(exp.id)} disabled={isLocked}>
+                    {isLocked ? 'Expense Closed' : 'Close Expense'}
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {/* Preview Modal */}

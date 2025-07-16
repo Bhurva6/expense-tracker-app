@@ -10,7 +10,7 @@ interface NavbarProps {
 export default function Navbar({ user, isAdmin, signOutUser, showAdminButton }: NavbarProps) {
   return (
     <div className="flex justify-between items-center mb-6">
-      <h1 className="text-2xl font-bold">Employee Expense Tracker</h1>
+      <h1 className="text-2xl font-bold">Panache Employee Expense Tracker</h1>
       <div className="flex items-center gap-2">
         <div className="text-lg font-semibold text-blue-700 dark:text-blue-300 mr-4">
           Welcome, {user.displayName || user.email}!

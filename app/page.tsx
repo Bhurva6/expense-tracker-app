@@ -20,6 +20,9 @@ function MainPage() {
   if (!user)
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center text-green-700 drop-shadow-sm">
+          Welcome to Panache Greens Employee Expense Tracker
+        </h1>
         <button onClick={signIn} className="bg-blue-600 text-white px-4 py-2 rounded">Sign in with Google</button>
       </div>
     );
@@ -29,7 +32,6 @@ function MainPage() {
   return (
     <div className="container mx-auto p-4">
       <Navbar user={user} isAdmin={isAdmin} signOutUser={signOutUser} showAdminButton={true} />
-      <div className="mb-4 text-lg font-semibold text-blue-700 dark:text-blue-300">Welcome, {user.displayName || user.email}!</div>
       <div className="flex gap-4 mb-6 border-b pb-2">
         <button
           className={`px-4 py-2 rounded-t ${activeTab === 'add' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}

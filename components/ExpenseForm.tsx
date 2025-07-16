@@ -85,31 +85,7 @@ export default function ExpenseForm() {
         createdAt: Timestamp.now(),
       };
       await addDoc(collection(db, 'expenses'), expenseData);
-      // Generate Excel file
-      const ws = XLSX.utils.json_to_sheet([
-        {
-          Date: form.date,
-          Food: form.food,
-          Transport: form.transport,
-          Hotel: form.hotel,
-          Fuel: form.fuel,
-          Site: form.site,
-          Notes: form.notes,
-          ...Object.fromEntries(form.others.map((o, i) => [
-            `Other${i + 1} (${o.label})`, o.amount
-          ])),
-          Total: total,
-          Name: user?.displayName,
-          Email: user?.email,
-          SubmittedAt: new Date().toLocaleString(),
-        },
-      ]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Expense');
-      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-      saveAs(blob, `expense_${form.date || Date.now()}.xlsx`);
-      setSuccess('Expense submitted! Your entry has been downloaded as an Excel file.');
+      setSuccess('Expense submitted!');
       setForm(initialState);
     } catch (err: any) {
       console.error('Expense submit error:', err);
