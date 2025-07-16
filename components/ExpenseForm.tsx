@@ -15,7 +15,6 @@ const initialState = {
   hotel: '',
   fuel: '',
   site: '',
-  miscellaneous: '',
   notes: '',
   file: null as File | null,
   others: [] as { label: string; amount: string }[],
@@ -95,7 +94,6 @@ export default function ExpenseForm() {
           Hotel: form.hotel,
           Fuel: form.fuel,
           Site: form.site,
-          Miscellaneous: form.miscellaneous,
           Notes: form.notes,
           ...Object.fromEntries(form.others.map((o, i) => [
             `Other${i + 1} (${o.label})`, o.amount
@@ -131,7 +129,6 @@ export default function ExpenseForm() {
           <Input name="hotel" value={form.hotel} onChange={handleChange} label="Hotel" type="number" min="0" />
           <Input name="fuel" value={form.fuel} onChange={handleChange} label="Fuel" type="number" min="0" />
           <Input name="site" value={form.site} onChange={handleChange} label="Site" type="number" min="0" />
-          <Input name="miscellaneous" value={form.miscellaneous} onChange={handleChange} label="Miscellaneous (describe)" type="text" />
         </div>
         <div className="space-y-2">
           {form.others.map((other, idx) => (

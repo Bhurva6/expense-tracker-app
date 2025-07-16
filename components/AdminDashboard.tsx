@@ -17,6 +17,7 @@ export default function AdminDashboard() {
   const [filterDept, setFilterDept] = useState('');
   const [previewExpense, setPreviewExpense] = useState<any | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [remarksDraft, setRemarksDraft] = useState<Record<string, string>>({});
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -53,6 +54,16 @@ export default function AdminDashboard() {
     fetchExpenses();
   };
 
+  const handleRemarksDraftChange = (id: string, value: string) => {
+    setRemarksDraft((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleRemarksBlur = (id: string) => {
+    if (remarksDraft[id] !== undefined) {
+      handleRemarksChange(id, remarksDraft[id]);
+    }
+  };
+
   const handlePreview = (exp: any) => {
     setPreviewExpense(exp);
     setIsPreviewOpen(true);
@@ -86,7 +97,6 @@ export default function AdminDashboard() {
           Fuel: exp.fuel,
           Meals: exp.meals,
           Entertainment: exp.entertainment,
-          Miscellaneous: exp.miscellaneous,
           Notes: exp.notes,
           Total: exp.total,
           Status: exp.status || 'Submitted',
@@ -158,8 +168,9 @@ export default function AdminDashboard() {
               <td>{exp.paidDate || '-'}</td>
               <td>
                 <Input
-                  value={exp.remarks || ''}
-                  onChange={e => handleRemarksChange(exp.id, e.target.value)}
+                  value={remarksDraft[exp.id] !== undefined ? remarksDraft[exp.id] : (exp.remarks || '')}
+                  onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                  onBlur={() => handleRemarksBlur(exp.id)}
                   label="Remarks"
                 />
               </td>
@@ -186,7 +197,6 @@ export default function AdminDashboard() {
               <div><b>Fuel:</b> ₹{previewExpense.fuel}</div>
               <div><b>Meals:</b> ₹{previewExpense.meals}</div>
               <div><b>Entertainment:</b> ₹{previewExpense.entertainment}</div>
-              <div><b>Miscellaneous:</b> ₹{previewExpense.miscellaneous}</div>
               <div><b>Notes:</b> {previewExpense.notes}</div>
               <div><b>Total:</b> ₹{previewExpense.total}</div>
               <div><b>Status:</b> {previewExpense.status || 'Under Review'}</div>
