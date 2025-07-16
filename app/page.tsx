@@ -8,7 +8,8 @@ import Navbar from '../components/Navbar';
 
 const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
-  'nitishjain0109@gmail.com'
+  'nitishjain0109@gmail.com',
+  'neetu@panachegreen.com'
 ];
 
 function MainPage() {

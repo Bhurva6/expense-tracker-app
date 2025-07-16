@@ -7,7 +7,7 @@ import Navbar from '../../components/Navbar';
 const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
-  'boss@your-company.com'
+  'neetu@panachegreen.com'
 ];
 
 function AdminPageContent() {
