@@ -106,7 +106,21 @@ export default function AdminDashboard() {
     <Card className="mt-6">
       <div className="flex gap-4 mb-4">
         <Input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} label="Filter by Month" />
-        <Input value={filterDept} onChange={e => setFilterDept(e.target.value)} label="Filter by Department" />
+        <select
+          value={filterDept}
+          onChange={e => setFilterDept(e.target.value)}
+          className="px-3 py-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+        >
+          <option value="">Filter by Department</option>
+          <option value="sales">Sales</option>
+          <option value="hr">HR</option>
+          <option value="marketing">Marketing</option>
+          <option value="admin">Admin</option>
+          <option value="site execution">Site Execution</option>
+          <option value="IT">IT</option>
+          <option value="accounts">Accounts</option>
+          <option value="production">Production</option>
+        </select>
         <Button onClick={fetchExpenses}>Refresh</Button>
         <Button onClick={handleDownloadMasterExcel} className="bg-green-600 hover:bg-green-700">Open in Excel</Button>
       </div>
@@ -151,7 +165,6 @@ export default function AdminDashboard() {
               </td>
               <td>
                 <button onClick={() => handlePreview(exp)} className="text-blue-600 underline mr-2">Preview</button>
-                <a href={exp.file} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Doc</a>
               </td>
             </tr>
           ))}
