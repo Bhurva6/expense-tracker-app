@@ -10,16 +10,15 @@ import { saveAs } from 'file-saver';
 
 const initialState = {
   date: '',
-  purpose: '',
-  hotel: '',
+  food: '',
   transport: '',
+  hotel: '',
   fuel: '',
-  meals: '',
-  phone: '',
-  entertainment: '',
+  site: '',
   miscellaneous: '',
   notes: '',
   file: null as File | null,
+  others: [] as { label: string; amount: string }[],
 };
 
 export default function ExpenseForm() {
@@ -30,9 +29,10 @@ export default function ExpenseForm() {
   const [success, setSuccess] = useState('');
 
   const total =
-    [form.hotel, form.transport, form.fuel, form.meals, form.entertainment, form.miscellaneous]
+    [form.food, form.transport, form.hotel, form.fuel, form.site]
       .map(Number)
-      .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
+      .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
+    + form.others.reduce((sum, o) => sum + (parseFloat(o.amount) || 0), 0);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, files } = e.target as any;
@@ -40,6 +40,26 @@ export default function ExpenseForm() {
       ...prev,
       [name]: files ? files[0] : value,
     }));
+  };
+
+  const handleOtherChange = (idx: number, field: 'label' | 'amount', value: string) => {
+    setForm((prev) => {
+      const updated = [...prev.others];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return { ...prev, others: updated };
+    });
+  };
+
+  const addOtherField = () => {
+    setForm((prev) => ({ ...prev, others: [...prev.others, { label: '', amount: '' }] }));
+  };
+
+  const removeOtherField = (idx: number) => {
+    setForm((prev) => {
+      const updated = [...prev.others];
+      updated.splice(idx, 1);
+      return { ...prev, others: updated };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,14 +90,16 @@ export default function ExpenseForm() {
       const ws = XLSX.utils.json_to_sheet([
         {
           Date: form.date,
-          Purpose: form.purpose,
-          Hotel: form.hotel,
+          Food: form.food,
           Transport: form.transport,
+          Hotel: form.hotel,
           Fuel: form.fuel,
-          Meals: form.meals,
-          Entertainment: form.entertainment,
+          Site: form.site,
           Miscellaneous: form.miscellaneous,
           Notes: form.notes,
+          ...Object.fromEntries(form.others.map((o, i) => [
+            `Other${i + 1} (${o.label})`, o.amount
+          ])),
           Total: total,
           Name: user?.displayName,
           Email: user?.email,
@@ -104,14 +126,35 @@ export default function ExpenseForm() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Input type="date" name="date" value={form.date} onChange={handleChange} required label="Date" />
-          <Input name="purpose" value={form.purpose} onChange={handleChange} required label="Purpose/Description" />
-          <Input name="hotel" value={form.hotel} onChange={handleChange} label="Hotel" type="number" min="0" />
+          <Input name="food" value={form.food} onChange={handleChange} label="Food" type="number" min="0" />
           <Input name="transport" value={form.transport} onChange={handleChange} label="Transport" type="number" min="0" />
+          <Input name="hotel" value={form.hotel} onChange={handleChange} label="Hotel" type="number" min="0" />
           <Input name="fuel" value={form.fuel} onChange={handleChange} label="Fuel" type="number" min="0" />
-          <Input name="meals" value={form.meals} onChange={handleChange} label="Meals" type="number" min="0" />
-          <Input name="phone" value={form.phone} onChange={handleChange} label="Phone" type="number" min="0" />
-          <Input name="entertainment" value={form.entertainment} onChange={handleChange} label="Entertainment" type="number" min="0" />
-          <Input name="miscellaneous" value={form.miscellaneous} onChange={handleChange} label="Miscellaneous" type="number" min="0" />
+          <Input name="site" value={form.site} onChange={handleChange} label="Site" type="number" min="0" />
+          <Input name="miscellaneous" value={form.miscellaneous} onChange={handleChange} label="Miscellaneous (describe)" type="text" />
+        </div>
+        <div className="space-y-2">
+          {form.others.map((other, idx) => (
+            <div key={idx} className="flex gap-2 items-end">
+              <Input
+                type="text"
+                value={other.label}
+                onChange={e => handleOtherChange(idx, 'label', e.target.value)}
+                label={idx === 0 ? 'Others (label)' : ''}
+                placeholder="Other expense label"
+              />
+              <Input
+                type="number"
+                value={other.amount}
+                onChange={e => handleOtherChange(idx, 'amount', e.target.value)}
+                label={idx === 0 ? 'Amount' : ''}
+                placeholder="Amount"
+                min="0"
+              />
+              <Button type="button" className="bg-red-500 px-2 py-1" onClick={() => removeOtherField(idx)}>-</Button>
+            </div>
+          ))}
+          <Button type="button" className="bg-blue-500" onClick={addOtherField}>+ Add Other expense</Button>
         </div>
         <Input name="notes" value={form.notes} onChange={handleChange} label="Notes" />
         <Input type="file" name="file" onChange={handleChange} label="Supporting Document (optional)" />
