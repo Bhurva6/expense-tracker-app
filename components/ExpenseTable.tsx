@@ -52,7 +52,7 @@ export default function ExpenseTable() {
           {expenses.map(exp => (
             <tr key={exp.id}>
               <td>{exp.date}</td>
-              <td>{exp.purpose}</td>
+              <td>{exp.purpose || exp.category}</td>
               <td>₹{exp.total}</td>
               <td>{exp.status || 'Submitted'}</td>
               <td>

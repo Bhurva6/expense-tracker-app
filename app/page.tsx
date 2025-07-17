@@ -55,7 +55,7 @@ function MainPage() {
           </button>
         )}
       </div>
-      {activeTab === 'add' && <ExpenseForm />}
+      {activeTab === 'add' && <ExpenseForm onExpenseAdded={() => setActiveTab('track')} />}
       {activeTab === 'track' && <ExpenseTable />}
       {isAdmin && activeTab === 'admin' && <AdminDashboard />}
     </div>

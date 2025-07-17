@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
@@ -7,6 +7,10 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Input, Button, Card } from "./ui/shadcn";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import Tesseract from 'tesseract.js';
+import { Dialog } from '@headlessui/react';
+import { PaperClipIcon, DocumentTextIcon, PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useRouter } from 'next/navigation';
 
 const initialState = {
   date: '',
@@ -20,12 +24,32 @@ const initialState = {
   others: [] as { label: string; amount: string }[],
 };
 
-export default function ExpenseForm() {
+export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const { user } = useAuth();
+  const router = useRouter();
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrText, setOcrText] = useState('');
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [fileInputKey, setFileInputKey] = useState(0);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [confirmAmount, setConfirmAmount] = useState('');
+  const [confirmDate, setConfirmDate] = useState('');
+  const [additionalProof, setAdditionalProof] = useState<File[]>([]);
+  const [billImages, setBillImages] = useState<File[]>([]);
+  const [billAmounts, setBillAmounts] = useState<string[]>([]);
+  const [billOcrLoading, setBillOcrLoading] = useState(false);
+  const [billDates, setBillDates] = useState<string[]>([]);
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billOcrTexts, setBillOcrTexts] = useState<string[]>([]);
+  const [currentBillIdx, setCurrentBillIdx] = useState(0);
+  const [showReviewAllModal, setShowReviewAllModal] = useState(false);
+  const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
 
   const total =
     [form.food, form.transport, form.hotel, form.fuel, form.site]
@@ -84,9 +108,11 @@ export default function ExpenseForm() {
         },
         createdAt: Timestamp.now(),
       };
-      await addDoc(collection(db, 'expenses'), expenseData);
+      const docRef = await addDoc(collection(db, 'expenses'), expenseData);
+      console.log('Expense added:', { id: docRef.id, ...expenseData });
       setSuccess('Expense submitted!');
       setForm(initialState);
+      if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
     } catch (err: any) {
       console.error('Expense submit error:', err);
       setError(err.message || 'Error submitting expense');
@@ -95,47 +121,409 @@ export default function ExpenseForm() {
     }
   };
 
+  // Open category modal before file upload
+  const handleFileInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    if (!selectedCategory) {
+      e.preventDefault();
+      setCategoryModalOpen(true);
+    }
+  };
+
+  // When a category is selected, allow file input
+  const handleCategorySelect = (cat: string) => {
+    setSelectedCategory(cat);
+    setCategoryModalOpen(false);
+    setFileInputKey(prev => prev + 1);
+    setBillOcrLoading(false);
+    setShouldTriggerFileInput(true);
+  };
+
+  React.useEffect(() => {
+    if (shouldTriggerFileInput && fileInputRef.current) {
+      console.log('Triggering file input click (useEffect)');
+      fileInputRef.current.click();
+      setShouldTriggerFileInput(false);
+    }
+  }, [shouldTriggerFileInput, fileInputRef]);
+
+  // Handle bill image(s) selection and OCR
+  const handleBillImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('handleBillImageChange triggered');
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    setBillImages(files);
+    setBillOcrLoading(true);
+    setShowBillModal(false);
+    setCurrentBillIdx(0);
+    setShowReviewAllModal(false);
+    setBillAmounts(Array(files.length).fill(''));
+    setBillDates(Array(files.length).fill(''));
+    setBillOcrTexts(Array(files.length).fill(''));
+    const amounts: string[] = [];
+    const dates: string[] = [];
+    const ocrs: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      try {
+        console.log('Starting OCR for file:', files[i]);
+        const { data } = await Tesseract.recognize(files[i], 'eng', { logger: m => console.log(m) });
+        console.log('OCR result:', data.text);
+        ocrs[i] = data.text;
+        // Extract numbers (amounts)
+        const numbers = Array.from(data.text.matchAll(/\d+[.,]?\d*/g)).map(m => m[0].replace(/,/g, ''));
+        const sorted = numbers.map(Number).filter(n => !isNaN(n)).sort((a, b) => b - a);
+        let [first] = sorted;
+        amounts[i] = first ? String(first) : '';
+        // Extract date
+        const dateMatch = data.text.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}[\/\-]\d{2}[\/\-]\d{2})/);
+        dates[i] = dateMatch ? dateMatch[0].replace(/\//g, '-') : '';
+      } catch (err) {
+        console.error('OCR error:', err);
+        amounts[i] = '';
+        dates[i] = '';
+        ocrs[i] = 'OCR failed';
+        setError('Text extraction failed for one or more images.');
+      }
+    }
+    setBillAmounts(amounts);
+    setBillDates(dates);
+    setBillOcrTexts(ocrs);
+    setBillOcrLoading(false);
+    setCurrentBillIdx(0);
+    setShowBillModal(true);
+    setFileInputKey(prev => prev + 1);
+    if (e.target) e.target.value = '';
+  };
+
+  // Move to next/prev image in review modal
+  const handleNextBill = () => setCurrentBillIdx(idx => Math.min(idx + 1, billImages.length - 1));
+  const handlePrevBill = () => {
+    if (currentBillIdx === 0) {
+      router.push('/');
+    } else {
+      setCurrentBillIdx(idx => Math.max(idx - 1, 0));
+    }
+  };
+  const handleConfirmAllBills = () => {
+    setShowBillModal(false);
+    setShowReviewAllModal(true);
+  };
+  const handleBackToReview = () => {
+    setShowReviewAllModal(false);
+    setShowBillModal(true);
+  };
+
+  // Remove a bill image/amount
+  const removeBillImage = (idx: number) => {
+    setBillImages(billImages.filter((_, i) => i !== idx));
+    setBillAmounts(billAmounts.filter((_, i) => i !== idx));
+    setBillDates(billDates.filter((_, i) => i !== idx));
+    setBillOcrTexts(billOcrTexts.filter((_, i) => i !== idx));
+  };
+
+  // Add expense from bill modal
+  const handleAddBillExpense = async () => {
+    setShowBillModal(false);
+    setShowReviewAllModal(false);
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    let billImageUrls: string[] = [];
+    try {
+      for (const file of billImages) {
+        const storageRef = ref(storage, `expense_bills/${user?.uid}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        billImageUrls.push(url);
+      }
+      const total = billAmounts.reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
+      const expenseData = {
+        date: billDates[0] || new Date().toISOString().slice(0, 10),
+        category: selectedCategory,
+        billImages: billImageUrls,
+        billAmounts,
+        total,
+        user: {
+          uid: user?.uid,
+          name: user?.displayName,
+          email: user?.email,
+        },
+        createdAt: Timestamp.now(),
+      };
+      const docRef = await addDoc(collection(db, 'expenses'), expenseData);
+      console.log('Expense added:', { id: docRef.id, ...expenseData });
+      setSuccess('Expense submitted!');
+      setForm(initialState);
+      setBillImages([]);
+      setBillAmounts([]);
+      setBillDates([]);
+      setSelectedCategory('');
+      if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
+    } catch (err: any) {
+      setError(err.message || 'Error submitting expense');
+    } finally {
+      setLoading(false);
+      router.push('/');
+    }
+  };
+
+  const handleAdditionalProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setAdditionalProof(Array.from(e.target.files));
+    }
+  };
+
+  // When closing the bill modal, also reset file input key
+  const closeBillModal = () => {
+    setShowBillModal(false);
+    setFileInputKey(prev => prev + 1);
+  };
+
   return (
-    <Card className="max-w-xl mx-auto p-6 mt-6">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Input type="date" name="date" value={form.date} onChange={handleChange} required label="Date" />
-          <Input name="food" value={form.food} onChange={handleChange} label="Food" type="number" min="0" />
-          <Input name="transport" value={form.transport} onChange={handleChange} label="Transport" type="number" min="0" />
-          <Input name="hotel" value={form.hotel} onChange={handleChange} label="Hotel" type="number" min="0" />
-          <Input name="fuel" value={form.fuel} onChange={handleChange} label="Fuel" type="number" min="0" />
-          <Input name="site" value={form.site} onChange={handleChange} label="Site" type="number" min="0" />
-        </div>
-        <div className="space-y-2">
-          {form.others.map((other, idx) => (
-            <div key={idx} className="flex gap-2 items-end">
-              <Input
-                type="text"
-                value={other.label}
-                onChange={e => handleOtherChange(idx, 'label', e.target.value)}
-                label={idx === 0 ? 'Others (label)' : ''}
-                placeholder="Other expense label"
+    <div className="max-w-4xl mx-auto mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start">
+      {/* Left: Expense Form */}
+      <Card className="p-4 sm:p-6 w-full">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input type="date" name="date" value={form.date} onChange={handleChange} required label="Date" />
+            <Input name="food" value={form.food} onChange={handleChange} label="Food" type="number" min="0" />
+            <Input name="transport" value={form.transport} onChange={handleChange} label="Transport" type="number" min="0" />
+            <Input name="hotel" value={form.hotel} onChange={handleChange} label="Hotel" type="number" min="0" />
+            <Input name="fuel" value={form.fuel} onChange={handleChange} label="Fuel" type="number" min="0" />
+            <Input name="site" value={form.site} onChange={handleChange} label="Site" type="number" min="0" />
+          </div>
+          <div className="space-y-2">
+            {form.others.map((other, idx) => (
+              <div key={idx} className="flex flex-col sm:flex-row gap-2 items-end">
+                <Input
+                  type="text"
+                  value={other.label}
+                  onChange={e => handleOtherChange(idx, 'label', e.target.value)}
+                  label={idx === 0 ? 'Others (label)' : ''}
+                  placeholder="Other expense label"
+                />
+                <Input
+                  type="number"
+                  value={other.amount}
+                  onChange={e => handleOtherChange(idx, 'amount', e.target.value)}
+                  label={idx === 0 ? 'Amount' : ''}
+                  placeholder="Amount"
+                  min="0"
+                />
+                <Button type="button" className="bg-red-500 px-2 py-1" onClick={() => removeOtherField(idx)}>-</Button>
+              </div>
+            ))}
+            <Button type="button" className="bg-blue-500 w-full sm:w-auto" onClick={addOtherField}>+ Add Other expense</Button>
+          </div>
+          <Input name="notes" value={form.notes} onChange={handleChange} label="Notes" />
+          <div className="mb-2">
+            <label className="block text-gray-900 dark:text-gray-100 mb-1 font-semibold">Additional Proof (images, PDFs, Word, etc.)</label>
+            <div
+              className="flex flex-col items-center justify-center border-2 border-dashed border-blue-400 rounded-lg p-4 bg-blue-50 dark:bg-gray-800 cursor-pointer hover:bg-blue-100 transition mb-2 min-h-[120px]"
+              onClick={() => document.getElementById('additional-proof-input')?.click()}
+              onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                const files = Array.from(e.dataTransfer.files);
+                setAdditionalProof(files);
+              }}
+            >
+              <PhotoIcon className="w-8 h-8 text-blue-400 mb-2" />
+              <span className="text-blue-700 dark:text-blue-200 font-medium text-center">Drag & drop files here, or <span className="underline">browse</span></span>
+              <span className="text-xs text-gray-500 mt-1 text-center">(Images, PDFs, Word, etc. | Multiple allowed)</span>
+              <input
+                id="additional-proof-input"
+                type="file"
+                multiple
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.rtf,.odt,.ods,.odp"
+                onChange={handleAdditionalProofChange}
+                className="hidden"
               />
-              <Input
-                type="number"
-                value={other.amount}
-                onChange={e => handleOtherChange(idx, 'amount', e.target.value)}
-                label={idx === 0 ? 'Amount' : ''}
-                placeholder="Amount"
-                min="0"
-              />
-              <Button type="button" className="bg-red-500 px-2 py-1" onClick={() => removeOtherField(idx)}>-</Button>
             </div>
-          ))}
-          <Button type="button" className="bg-blue-500" onClick={addOtherField}>+ Add Other expense</Button>
+            {additionalProof.length > 0 && (
+              <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {additionalProof.map((file, idx) => {
+                  const isImage = file.type.startsWith('image/');
+                  const isPdf = file.type === 'application/pdf';
+                  const isDoc = file.name.match(/\.(docx?|pdf|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp)$/i);
+                  return (
+                    <li key={idx} className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded p-2 border border-gray-200 dark:border-gray-700">
+                      {isImage ? (
+                        <img src={URL.createObjectURL(file)} alt={file.name} className="w-10 h-10 object-cover rounded" />
+                      ) : isPdf ? (
+                        <DocumentTextIcon className="w-8 h-8 text-red-500" />
+                      ) : isDoc ? (
+                        <DocumentTextIcon className="w-8 h-8 text-blue-500" />
+                      ) : (
+                        <PaperClipIcon className="w-8 h-8 text-gray-400" />
+                      )}
+                      <span className="truncate text-xs flex-1" title={file.name}>{file.name}</span>
+                      <button type="button" onClick={e => { e.stopPropagation(); setAdditionalProof(additionalProof.filter((_, i) => i !== idx)); }} className="ml-1 text-gray-400 hover:text-red-500">
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          {ocrText && (
+            <div className="bg-gray-100 text-xs p-2 rounded mt-2 whitespace-pre-wrap">
+              <b>Extracted Text:</b> <br />{ocrText}
+            </div>
+          )}
+          <div className="font-bold">Total: ₹{total}</div>
+          <Button type="submit" disabled={loading} className="w-full sm:w-auto">{loading ? 'Submitting...' : 'Submit Expense'}</Button>
+          {error && <div className="text-red-500">{error}</div>}
+          {success && <div className="text-green-600 text-lg font-semibold text-center">{success}</div>}
+        </form>
+        {/* Category Selection Modal */}
+        <Dialog open={categoryModalOpen} onClose={() => setCategoryModalOpen(false)} className="fixed z-50 inset-0 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+          <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 max-w-xs w-full z-10">
+            <Dialog.Title className="text-lg font-bold mb-4">Select Bill Category</Dialog.Title>
+            <div className="space-y-2">
+              {['food','hotel','transport','fuel','site','others'].map(cat => (
+                <Button key={cat} className="w-full" onClick={() => handleCategorySelect(cat)}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Button>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button onClick={() => setCategoryModalOpen(false)} className="bg-gray-500">Cancel</Button>
+            </div>
+          </div>
+        </Dialog>
+        {/* Confirm Add Modal */}
+        <Dialog open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} className="fixed z-50 inset-0 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+          <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 max-w-md w-full z-10">
+            <Dialog.Title className="text-lg font-bold mb-4">Expense Details</Dialog.Title>
+            <div className="space-y-2 text-sm">
+              <div><b>Category:</b> {selectedCategory}</div>
+              <div className="flex items-center gap-2"><b>Amount:</b>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-32"
+                  value={confirmAmount}
+                  onChange={e => setConfirmAmount(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2"><b>Date:</b>
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1 w-40"
+                  value={confirmDate}
+                  onChange={e => setConfirmDate(e.target.value)}
+                />
+              </div>
+              <div><b>Total:</b> ₹{(() => {
+                if (selectedCategory === 'others') return confirmAmount;
+                return confirmAmount;
+              })()}</div>
+              <div><b>Extracted Text:</b><br /><span className="whitespace-pre-wrap">{ocrText}</span></div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button onClick={() => setConfirmModalOpen(false)} className="bg-gray-500">Cancel</Button>
+            </div>
+          </div>
+        </Dialog>
+      </Card>
+      {/* Right: Upload/Take Picture Button */}
+      <div className="flex flex-col items-center justify-center w-full h-full py-4 md:py-0">
+        <Button
+          type="button"
+          className="w-full max-w-xs h-24 md:w-64 md:h-48 bg-blue-600 hover:bg-blue-700 text-white text-base md:text-lg font-bold flex flex-col items-center justify-center gap-2 shadow-lg rounded-xl"
+          onClick={() => setCategoryModalOpen(true)}
+          disabled={ocrLoading}
+        >
+          <PhotoIcon className="w-10 h-10 md:w-12 md:h-12 mb-2" />
+          Upload/Take a picture of a bill
+        </Button>
+        <input
+          ref={fileInputRef}
+          key={fileInputKey}
+          type="file"
+          name="billImages"
+          accept="image/*"
+          multiple
+          onChange={handleBillImageChange}
+          className="hidden"
+          disabled={ocrLoading}
+        />
+      </div>
+      {/* Bill Modal for reviewing each image one by one */}
+      <Dialog open={showBillModal} onClose={closeBillModal} className="fixed z-50 inset-0 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+        <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-md w-full z-10 flex flex-col items-center">
+          <Dialog.Title className="text-lg font-bold mb-4">Review Bill {billImages.length > 1 ? `${currentBillIdx + 1} of ${billImages.length}` : ''}</Dialog.Title>
+          {billImages.length > 0 && (
+            <>
+              <img src={URL.createObjectURL(billImages[currentBillIdx])} alt={billImages[currentBillIdx].name} className="w-32 h-32 object-cover rounded mb-2" />
+              <div className="w-full mb-2">
+                <label className="block text-xs font-semibold mb-1">Extracted Amount</label>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-full"
+                  value={billAmounts[currentBillIdx]}
+                  onChange={e => setBillAmounts(billAmounts.map((a, i) => i === currentBillIdx ? e.target.value : a))}
+                />
+              </div>
+              <div className="w-full mb-2">
+                <label className="block text-xs font-semibold mb-1">Date/Time Stamp</label>
+                <input
+                  type="text"
+                  className="border rounded px-2 py-1 w-full bg-gray-100 text-black"
+                  value={new Date().toLocaleString()}
+                  readOnly
+                />
+              </div>
+              <div className="flex w-full justify-between mt-4 gap-2">
+                <Button onClick={handlePrevBill} disabled={currentBillIdx === 0} className="w-1/3">Previous</Button>
+                {currentBillIdx < billImages.length - 1 ? (
+                  <Button onClick={handleNextBill} className="w-1/3">Next</Button>
+                ) : (
+                  <Button onClick={handleConfirmAllBills} className="w-1/3 bg-green-600">Confirm All</Button>
+                )}
+              </div>
+            </>
+          )}
         </div>
-        <Input name="notes" value={form.notes} onChange={handleChange} label="Notes" />
-        <Input type="file" name="file" onChange={handleChange} label="Supporting Document (optional)" />
-        <div className="font-bold">Total: ₹{total}</div>
-        <Button type="submit" disabled={loading}>{loading ? 'Submitting...' : 'Submit Expense'}</Button>
-        {error && <div className="text-red-500">{error}</div>}
-        {success && <div className="text-green-600 text-lg font-semibold text-center">{success}</div>}
-      </form>
-    </Card>
+      </Dialog>
+      {/* Review All Modal for final confirmation and total */}
+      <Dialog open={showReviewAllModal} onClose={handleBackToReview} className="fixed z-50 inset-0 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+        <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-md w-full z-10">
+          <Dialog.Title className="text-lg font-bold mb-4">Confirm All Bills</Dialog.Title>
+          <div className="space-y-2">
+            {billImages.map((file, idx) => (
+              <div key={idx} className="flex items-center gap-2 border-b pb-2">
+                <img src={URL.createObjectURL(file)} alt={file.name} className="w-12 h-12 object-cover rounded" />
+                <div className="flex-1">
+                  <div className="text-xs">Amount: <b>₹{billAmounts[idx]}</b></div>
+                  <div className="text-xs text-gray-500">{billOcrTexts[idx]?.slice(0, 40)}...</div>
+                </div>
+              </div>
+            ))}
+            <div className="mt-4 text-right font-bold">Total: ₹{billAmounts.reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0)}</div>
+            <div className="mt-2 text-sm">Category: <span className="font-semibold">{selectedCategory}</span></div>
+            <div className="mt-2 text-sm">Timestamp: <span className="font-semibold">{new Date().toLocaleString()}</span></div>
+            <div className="flex w-full justify-between mt-4 gap-2">
+              <Button onClick={handleBackToReview} className="w-1/2">Back</Button>
+              <Button className="w-1/2 bg-green-600" onClick={handleAddBillExpense}>Add Expense</Button>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+      {/* Loader Modal for OCR */}
+      <Dialog open={billOcrLoading} onClose={() => {}} className="fixed z-50 inset-0 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+        <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 max-w-xs w-full z-10 flex flex-col items-center justify-center">
+          <div className="text-lg font-semibold text-blue-700 dark:text-blue-200 mb-4">Extracting text...</div>
+          <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+          </svg>
+        </div>
+      </Dialog>
+    </div>
   );
 } 
