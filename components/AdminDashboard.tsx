@@ -9,7 +9,7 @@ import { Dialog } from '@headlessui/react';
 
 const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
-  'neetu@panachegreen.com'];
+  'neetu@panachegreen.com','kunal.nihalani@icloud.com'];
 
 export default function AdminDashboard() {
   const [expenses, setExpenses] = useState<any[]>([]);
