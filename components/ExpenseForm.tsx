@@ -1,9 +1,8 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { db, storage } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Input, Button, Card } from "./ui/shadcn";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -11,6 +10,7 @@ import Tesseract from 'tesseract.js';
 import { Dialog } from '@headlessui/react';
 import { PaperClipIcon, DocumentTextIcon, PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
+import { db } from '../lib/firebase';
 
 const initialState = {
   date: '',
@@ -90,16 +90,27 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     setLoading(true);
     setError('');
     setSuccess('');
-    let fileUrl = '';
+    
+    const proofUrls: string[] = [];
+
     try {
-      if (form.file) {
-        const storageRef = ref(storage, `expense_docs/${user?.uid}/${Date.now()}_${form.file.name}`);
-        await uploadBytes(storageRef, form.file);
-        fileUrl = await getDownloadURL(storageRef);
+      if (additionalProof.length > 0) {
+        for (const proofFile of additionalProof) {
+          const filePath = `expenses/${user?.uid}/${Date.now()}_${proofFile.name}`;
+          const { error: uploadError } = await supabase.storage
+            .from('expenses')
+            .upload(filePath, proofFile);
+
+          if (uploadError) throw uploadError;
+
+          const { data } = supabase.storage.from('expenses').getPublicUrl(filePath);
+          proofUrls.push(data.publicUrl);
+        }
       }
+
       const expenseData = {
         ...form,
-        file: fileUrl,
+        billImages: proofUrls,
         total,
         user: {
           uid: user?.uid,
@@ -108,10 +119,13 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         },
         createdAt: Timestamp.now(),
       };
+      delete (expenseData as any).file; // Remove redundant `file` property from form state
+
       const docRef = await addDoc(collection(db, 'expenses'), expenseData);
       console.log('Expense added:', { id: docRef.id, ...expenseData });
       setSuccess('Expense submitted!');
       setForm(initialState);
+      setAdditionalProof([]); // Clear proof files
       if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
     } catch (err: any) {
       console.error('Expense submit error:', err);
@@ -230,10 +244,15 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     let billImageUrls: string[] = [];
     try {
       for (const file of billImages) {
-        const storageRef = ref(storage, `expense_bills/${user?.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        billImageUrls.push(url);
+        const filePath = `expense-bills/${user?.uid}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('expense-bills')
+          .upload(filePath, file);
+  
+        if (uploadError) throw uploadError;
+  
+        const { data } = supabase.storage.from('expense-bills').getPublicUrl(filePath);
+        billImageUrls.push(data.publicUrl);
       }
       const total = billAmounts.reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
       const expenseData = {
@@ -309,16 +328,17 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   placeholder="Amount"
                   min="0"
                 />
-                <Button type="button" className="bg-red-500 px-2 py-1" onClick={() => removeOtherField(idx)}>-</Button>
+                <Button type="button" className="px-2 py-1" style={{ background: 'var(--muted)', color: 'var(--surface)' }} onClick={() => removeOtherField(idx)}>-</Button>
               </div>
             ))}
-            <Button type="button" className="bg-blue-500 w-full sm:w-auto" onClick={addOtherField}>+ Add Other expense</Button>
+            <Button type="button" className="w-full sm:w-auto" style={{ background: 'var(--primary)', color: 'var(--surface)' }} onClick={addOtherField}>+ Add Other expense</Button>
           </div>
           <Input name="notes" value={form.notes} onChange={handleChange} label="Notes" />
           <div className="mb-2">
-            <label className="block text-gray-900 dark:text-gray-100 mb-1 font-semibold">Additional Proof (images, PDFs, Word, etc.)</label>
+            <label className="block mb-1 font-semibold" style={{ color: 'var(--secondary)' }}>Additional Proof (images, PDFs, Word, etc.)</label>
             <div
-              className="flex flex-col items-center justify-center border-2 border-dashed border-blue-400 rounded-lg p-4 bg-blue-50 dark:bg-gray-800 cursor-pointer hover:bg-blue-100 transition mb-2 min-h-[120px]"
+              className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-4 cursor-pointer transition mb-2 min-h-[120px]"
+              style={{ borderColor: 'var(--primary)', background: 'var(--accent-light)' }}
               onClick={() => document.getElementById('additional-proof-input')?.click()}
               onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
               onDrop={e => {
@@ -328,9 +348,9 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 setAdditionalProof(files);
               }}
             >
-              <PhotoIcon className="w-8 h-8 text-blue-400 mb-2" />
-              <span className="text-blue-700 dark:text-blue-200 font-medium text-center">Drag & drop files here, or <span className="underline">browse</span></span>
-              <span className="text-xs text-gray-500 mt-1 text-center">(Images, PDFs, Word, etc. | Multiple allowed)</span>
+              <PhotoIcon className="w-8 h-8 mb-2" style={{ color: 'var(--primary)' }} />
+              <span className="font-medium text-center" style={{ color: 'var(--primary)' }}>Drag & drop files here, or <span className="underline">browse</span></span>
+              <span className="text-xs mt-1 text-center" style={{ color: 'var(--muted)' }}>(Images, PDFs, Word, etc. | Multiple allowed)</span>
               <input
                 id="additional-proof-input"
                 type="file"
@@ -347,18 +367,18 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   const isPdf = file.type === 'application/pdf';
                   const isDoc = file.name.match(/\.(docx?|pdf|xls|xlsx|ppt|pptx|txt|csv|rtf|odt|ods|odp)$/i);
                   return (
-                    <li key={idx} className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded p-2 border border-gray-200 dark:border-gray-700">
+                    <li key={idx} className="flex items-center gap-2 rounded p-2 border" style={{ background: 'var(--surface)', borderColor: 'var(--muted)' }}>
                       {isImage ? (
                         <img src={URL.createObjectURL(file)} alt={file.name} className="w-10 h-10 object-cover rounded" />
                       ) : isPdf ? (
-                        <DocumentTextIcon className="w-8 h-8 text-red-500" />
+                        <DocumentTextIcon className="w-8 h-8" style={{ color: 'var(--accent)' }} />
                       ) : isDoc ? (
-                        <DocumentTextIcon className="w-8 h-8 text-blue-500" />
+                        <DocumentTextIcon className="w-8 h-8" style={{ color: 'var(--primary)' }} />
                       ) : (
-                        <PaperClipIcon className="w-8 h-8 text-gray-400" />
+                        <PaperClipIcon className="w-8 h-8" style={{ color: 'var(--muted)' }} />
                       )}
                       <span className="truncate text-xs flex-1" title={file.name}>{file.name}</span>
-                      <button type="button" onClick={e => { e.stopPropagation(); setAdditionalProof(additionalProof.filter((_, i) => i !== idx)); }} className="ml-1 text-gray-400 hover:text-red-500">
+                      <button type="button" onClick={e => { e.stopPropagation(); setAdditionalProof(additionalProof.filter((_, i) => i !== idx)); }} className="ml-1" style={{ color: 'var(--accent)' }}>
                         <XMarkIcon className="w-4 h-4" />
                       </button>
                     </li>
@@ -368,14 +388,14 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             )}
           </div>
           {ocrText && (
-            <div className="bg-gray-100 text-xs p-2 rounded mt-2 whitespace-pre-wrap">
+            <div className="text-xs p-2 rounded mt-2 whitespace-pre-wrap" style={{ background: 'var(--accent-light)', color: 'var(--foreground)' }}>
               <b>Extracted Text:</b> <br />{ocrText}
             </div>
           )}
-          <div className="font-bold">Total: ₹{total}</div>
+          <div className="font-bold" style={{ color: 'var(--primary)' }}>Total: ₹{total}</div>
           <Button type="submit" disabled={loading} className="w-full sm:w-auto">{loading ? 'Submitting...' : 'Submit Expense'}</Button>
-          {error && <div className="text-red-500">{error}</div>}
-          {success && <div className="text-green-600 text-lg font-semibold text-center">{success}</div>}
+          {error && <div style={{ color: 'var(--accent)' }}>{error}</div>}
+          {success && <div style={{ color: 'var(--accent)' }} className="text-lg font-semibold text-center">{success}</div>}
         </form>
         {/* Category Selection Modal */}
         <Dialog open={categoryModalOpen} onClose={() => setCategoryModalOpen(false)} className="fixed z-50 inset-0 flex items-center justify-center">
@@ -431,7 +451,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       <div className="flex flex-col items-center justify-center w-full h-full py-4 md:py-0">
         <Button
           type="button"
-          className="w-full max-w-xs h-24 md:w-64 md:h-48 bg-blue-600 hover:bg-blue-700 text-white text-base md:text-lg font-bold flex flex-col items-center justify-center gap-2 shadow-lg rounded-xl"
+          className="w-full max-w-xs h-24 md:w-64 md:h-48 text-white text-base md:text-lg font-bold flex flex-col items-center justify-center gap-2 shadow-lg rounded-xl"
+          style={{ background: 'var(--primary)' }}
           onClick={() => setCategoryModalOpen(true)}
           disabled={ocrLoading}
         >
@@ -517,8 +538,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       <Dialog open={billOcrLoading} onClose={() => {}} className="fixed z-50 inset-0 flex items-center justify-center">
         <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
         <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 max-w-xs w-full z-10 flex flex-col items-center justify-center">
-          <div className="text-lg font-semibold text-blue-700 dark:text-blue-200 mb-4">Extracting text...</div>
-          <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <div className="text-lg font-semibold mb-4" style={{ color: 'var(--foreground)' }}>Extracting text...</div>
+          <svg className="animate-spin h-8 w-8" style={{ color: 'var(--primary)' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
           </svg>

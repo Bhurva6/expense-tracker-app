@@ -1,5 +1,6 @@
 'use client';
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import ExpenseForm from '../components/ExpenseForm';
 import ExpenseTable from '../components/ExpenseTable';
@@ -10,7 +11,10 @@ const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
   'neetu@panachegreen.com',
-  'kunal.nihalani@icloud.com'
+  'kunal.nihalani@icloud.com',
+  'hrd@panachegreen.com',
+  'brijesh@panachegreen.com',
+  'accounts@panachegreen.com',
 ];
 
 function MainPage() {
@@ -21,10 +25,16 @@ function MainPage() {
   if (!user)
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
-        <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center text-green-700 drop-shadow-sm">
+        <Image
+          src="/panache_green_logo.jpeg"
+          alt="Panache Green Logo"
+          width={150}
+          height={150}
+        />
+        <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center" style={{ color: 'var(--primary)' }}>
           Welcome to Panache Greens Employee Expense Tracker
         </h1>
-        <button onClick={signIn} className="bg-blue-600 text-white px-4 py-2 rounded">Sign in with Google</button>
+        <button onClick={signIn} className="text-white px-4 py-2 rounded" style={{ background: 'var(--primary)' }}>Sign in with Google</button>
       </div>
     );
 
@@ -35,20 +45,23 @@ function MainPage() {
       <Navbar user={user} isAdmin={isAdmin} signOutUser={signOutUser} showAdminButton={true} />
       <div className="flex gap-4 mb-6 border-b pb-2">
         <button
-          className={`px-4 py-2 rounded-t ${activeTab === 'add' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}
+          className={`px-4 py-2 rounded-t ${activeTab === 'add' ? 'text-white' : ''}`}
+          style={{ background: activeTab === 'add' ? 'var(--primary)' : 'var(--surface)', color: activeTab === 'add' ? 'var(--surface)' : 'var(--foreground)' }}
           onClick={() => setActiveTab('add')}
         >
           Add New Expense
         </button>
         <button
-          className={`px-4 py-2 rounded-t ${activeTab === 'track' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}
+          className={`px-4 py-2 rounded-t ${activeTab === 'track' ? 'text-white' : ''}`}
+          style={{ background: activeTab === 'track' ? 'var(--primary)' : 'var(--surface)', color: activeTab === 'track' ? 'var(--surface)' : 'var(--foreground)' }}
           onClick={() => setActiveTab('track')}
         >
           Track My Expenses
         </button>
         {isAdmin && (
           <button
-            className={`px-4 py-2 rounded-t ${activeTab === 'admin' ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}
+            className={`px-4 py-2 rounded-t ${activeTab === 'admin' ? 'text-white' : ''}`}
+            style={{ background: activeTab === 'admin' ? 'var(--accent)' : 'var(--surface)', color: activeTab === 'admin' ? 'var(--surface)' : 'var(--foreground)' }}
             onClick={() => setActiveTab('admin')}
           >
             Admin Dashboard

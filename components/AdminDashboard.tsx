@@ -9,7 +9,11 @@ import { Dialog } from '@headlessui/react';
 
 const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
-  'neetu@panachegreen.com','kunal.nihalani@icloud.com'];
+  'neetu@panachegreen.com',
+  'kunal.nihalani@icloud.com',
+  'hrd@panachegreen.com',
+  'brijesh@panachegreen.com',
+  'accounts@panachegreen.com',];
 
 export default function AdminDashboard() {
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -122,6 +126,8 @@ export default function AdminDashboard() {
           Notes: exp.notes,
           Total: exp.total,
           Status: exp.status || 'Submitted',
+          'Document Link': exp.file || '',
+          'Bill Image Links': exp.billImages ? exp.billImages.join(', ') : '',
           Name: exp.user?.name,
           Email: exp.user?.email,
           SubmittedAt: exp.createdAt?.toDate ? exp.createdAt.toDate().toLocaleString() : '',
@@ -142,6 +148,12 @@ export default function AdminDashboard() {
     return aLocked ? 1 : -1;
   });
 
+  const isImageUrl = (url: string) => {
+    if (!url) return false;
+    // Handle both jpeg and jpg extensions
+    return /\.(jpe?g|png|webp|avif|gif|svg)$/.test(url.toLowerCase());
+  };
+
   return (
     <Card className="mt-6">
       <div className="flex gap-4 mb-4">
@@ -149,7 +161,8 @@ export default function AdminDashboard() {
         <select
           value={filterDept}
           onChange={e => setFilterDept(e.target.value)}
-          className="px-3 py-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          className="px-3 py-2 border rounded"
+          style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
         >
           <option value="">Filter by Department</option>
           <option value="sales">Sales</option>
@@ -162,11 +175,11 @@ export default function AdminDashboard() {
           <option value="production">Production</option>
         </select>
         <Button onClick={fetchExpenses}>Refresh</Button>
-        <Button onClick={handleDownloadMasterExcel} className="bg-green-600 hover:bg-green-700">Open in Excel</Button>
+        <Button onClick={handleDownloadMasterExcel} style={{ background: 'var(--accent)', color: 'var(--surface)' }}>Open in Excel</Button>
       </div>
       <table className="min-w-full text-sm border-separate border-spacing-y-2">
         <thead>
-          <tr className="bg-gray-100 dark:bg-gray-800">
+          <tr style={{ background: 'var(--accent-light)', color: 'var(--foreground)' }}>
             <th className="px-4 py-2 text-left">Name</th>
             <th className="px-4 py-2 text-left">Department</th>
             <th className="px-4 py-2 text-left">Date Added</th>
@@ -185,10 +198,7 @@ export default function AdminDashboard() {
             return (
               <tr
                 key={exp.id}
-                className={
-                  `${isLocked ? 'opacity-50 pointer-events-none' : ''} ` +
-                  (idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800')
-                }
+                style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--accent-light)', color: 'var(--foreground)', opacity: isLocked ? 0.5 : 1 }}
               >
                 <td className="px-4 py-2 align-top">{exp.user?.name}</td>
                 <td className="px-4 py-2 align-top">{exp.user?.department || '-'}</td>
@@ -204,7 +214,7 @@ export default function AdminDashboard() {
                       min="0"
                       disabled={isLocked}
                     />
-                    <Button type="button" className="bg-blue-600 px-2 py-1" onClick={() => handlePaidSave(exp.id, exp.total)} disabled={isLocked}>Save</Button>
+                    <Button type="button" className="px-2 py-1" style={{ background: 'var(--primary)', color: 'var(--surface)' }} onClick={() => handlePaidSave(exp.id, exp.total)} disabled={isLocked}>Save</Button>
                   </div>
                 </td>
                 <td className="px-4 py-2 align-top text-right">{(exp.total || 0) - (Number(exp.paid) || 0)}</td>
@@ -213,17 +223,28 @@ export default function AdminDashboard() {
                     value={exp.status || 'Under Review'}
                     onChange={e => handleStatusChange(exp.id, e.target.value)}
                     disabled={isLocked}
-                    className={
-                      `px-2 py-1 rounded border transition-colors ` +
-                      (exp.status === 'Reject'
-                        ? 'bg-red-600 text-white border-red-700'
-                        : exp.status === 'Approve'
-                        ? 'bg-green-400 text-black border-green-600'
-                        : 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-gray-300')
-                    }
+                    className="px-2 py-1 rounded border transition-colors"
+                    style={{
+                      background:
+                        exp.status === 'Reject'
+                          ? '#ef4444'
+                          : exp.status === 'Approve'
+                          ? '#22c55e'
+                          : 'var(--surface)',
+                      color:
+                        exp.status === 'Reject' || exp.status === 'Approve'
+                          ? '#ffffff'
+                          : 'var(--foreground)',
+                      borderColor:
+                        exp.status === 'Reject'
+                          ? '#ef4444'
+                          : exp.status === 'Approve'
+                          ? '#22c55e'
+                          : 'var(--muted)',
+                    }}
                   >
-                    <option value="Approve" className="bg-green-400 text-black">Approve</option>
-                    <option value="Reject" className="bg-red-600 text-white">Reject</option>
+                    <option value="Approve">Approve</option>
+                    <option value="Reject">Reject</option>
                     <option value="Under Review">Under Review</option>
                   </select>
                 </td>
@@ -238,8 +259,8 @@ export default function AdminDashboard() {
                   />
                 </td>
                 <td className="px-4 py-2 align-top text-center">
-                  <button onClick={() => handlePreview(exp)} className="text-blue-600 underline mr-2" disabled={isLocked}>Preview</button>
-                  <Button type="button" className="bg-gray-600 px-2 py-1" onClick={() => handleCloseExpense(exp.id)} disabled={isLocked}>
+                  <button onClick={() => handlePreview(exp)} className="underline mr-2" style={{ color: 'var(--primary)', background: 'none', border: 'none' }} disabled={isLocked}>Preview</button>
+                  <Button type="button" className="px-2 py-1" style={{ background: 'var(--muted)', color: 'var(--surface)' }} onClick={() => handleCloseExpense(exp.id)} disabled={isLocked}>
                     {isLocked ? 'Expense Closed' : 'Close Expense'}
                   </Button>
                 </td>
@@ -269,7 +290,28 @@ export default function AdminDashboard() {
               <div><b>Status:</b> {previewExpense.status || 'Under Review'}</div>
               <div><b>Remarks:</b> {previewExpense.remarks || '-'}</div>
               {previewExpense.file && (
-                <div><b>Document:</b> <a href={previewExpense.file} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View</a></div>
+                <div>
+                  <b>Document:</b>{' '}
+                  {isImageUrl(previewExpense.file) ? (
+                    <a href={previewExpense.file} target="_blank" rel="noopener noreferrer">
+                      <img src={previewExpense.file} alt="Expense proof" className="max-w-full h-auto mt-2 rounded" />
+                    </a>
+                  ) : (
+                    <a href={previewExpense.file} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: 'var(--primary)' }}>View Document</a>
+                  )}
+                </div>
+              )}
+              {previewExpense.billImages && previewExpense.billImages.length > 0 && (
+                <div className="mt-2">
+                  <b>Bills:</b>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {previewExpense.billImages.map((url: string, idx: number) => (
+                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={`Bill proof ${idx + 1}`} className="w-24 h-24 object-cover rounded" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
             <div className="mt-6 flex justify-end">

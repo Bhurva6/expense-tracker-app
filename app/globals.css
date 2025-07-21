@@ -3,24 +3,31 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #5ca49c;
+  --secondary: #455a60;
+  --accent: #9aae55;
+  --accent-light: #e2e2cf;
+  --muted: #868e90;
+  --surface: #f6f8f7;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #5ca49c;
+  --secondary: #e2e2cf;
+  --accent: #9aae55;
+  --accent-light: #232b2b;
+  --muted: #868e90;
+  --surface: #171717;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.themed-input::placeholder {
+  color: var(--muted);
 }
