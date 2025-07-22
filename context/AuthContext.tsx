@@ -50,7 +50,7 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}; 
 
 // Theme context for light/dark mode
 interface ThemeContextType {

@@ -46,16 +46,16 @@ export default function ExpenseTable() {
       <div className="shadow-lg rounded-lg p-6" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
         <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--primary)' }}>My Expenses</h2>
         <table className="min-w-full text-sm border-separate border-spacing-y-1" style={{ background: 'var(--surface)' }}>
-          <thead>
+        <thead>
             <tr style={{ background: 'var(--accent-light)', color: 'var(--foreground)' }}>
               <th className="px-4 py-2 text-left rounded-tl-lg">Date</th>
               <th className="px-4 py-2 text-left">Category</th>
               <th className="px-4 py-2 text-right">Total</th>
               <th className="px-4 py-2 text-center">Status</th>
               <th className="px-4 py-2 text-center rounded-tr-lg">Proof</th>
-            </tr>
-          </thead>
-          <tbody>
+          </tr>
+        </thead>
+        <tbody>
             {expenses.map((exp, idx) => (
               <tr key={exp.id} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--accent-light)', borderRadius: 8 }}>
                 <td className="px-4 py-2 align-top rounded-l-lg">{new Date(exp.createdAt.seconds * 1000).toLocaleDateString()}</td>
@@ -96,11 +96,11 @@ export default function ExpenseTable() {
                       )
                     ))}
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       </div>
     </div>
   );
