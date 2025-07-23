@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../context/AuthContext';
+import InstallPWA from './InstallPWA';
 
 interface NavbarProps {
   user: { displayName?: string | null; email?: string | null };
@@ -17,6 +18,7 @@ export default function Navbar({ user, isAdmin, signOutUser, showAdminButton }: 
         <div className="text-lg font-semibold mr-4" style={{ color: 'var(--secondary)' }}>
           Welcome, {user.displayName || user.email}!
         </div>
+        <InstallPWA />
         <button
           onClick={toggleTheme}
           className="px-3 py-1 rounded transition-colors mr-2"
