@@ -11,6 +11,7 @@ import { Dialog } from '@headlessui/react';
 import { PaperClipIcon, DocumentTextIcon, PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { db } from '../lib/firebase';
+import { sendNewExpenseNotification } from '../lib/emailService';
 
 const initialState = {
   date: '',
@@ -123,7 +124,34 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       const docRef = await addDoc(collection(db, 'expenses'), expenseData);
       console.log('Expense added:', { id: docRef.id, ...expenseData });
-      setSuccess('Expense submitted!');
+      
+      // Send email notification
+      try {
+        await sendNewExpenseNotification({
+          id: docRef.id,
+          user: {
+            name: user?.displayName || user?.email || 'Unknown User',
+            email: user?.email || '',
+            department: 'Not specified', // You can add department to user profile later
+          },
+          date: expenseData.date,
+          purpose: expenseData.notes || 'General expense', // Using notes as purpose for now
+          hotel: Number(expenseData.hotel) || 0,
+          transport: Number(expenseData.transport) || 0,
+          fuel: Number(expenseData.fuel) || 0,
+          meals: Number(expenseData.food) || 0,
+          entertainment: Number(expenseData.site) || 0,
+          total: total,
+          createdAt: expenseData.createdAt,
+          notes: expenseData.notes,
+        });
+        console.log('Email notification sent successfully');
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        // Don't fail the expense submission if email fails
+      }
+      
+      setSuccess('Expense submitted successfully! Notifications have been sent.');
       setForm(initialState);
       setAdditionalProof([]); // Clear proof files
       if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();

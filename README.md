@@ -1,17 +1,52 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Expense Management System
+
+A comprehensive expense management system with automated email notifications built with Next.js, Firebase, and EmailJS.
+
+### Features
+
+- **Employee Expense Submission**: Submit expenses with receipt uploads and OCR text extraction
+- **Admin Dashboard**: Review, approve/reject expenses with comprehensive statistics
+- **Automated Email Notifications**:
+  - New expense notifications to admins and employees
+  - Status change notifications 
+  - Monthly expense reports to admins
+- **Excel Export**: Download detailed expense reports
+- **Real-time Status Tracking**: Track expense status changes with timestamps
+
+### Email Notification System
+
+This system includes automated email notifications powered by EmailJS:
+
+1. **New Expense Notifications**: Sent to all admins and the submitting employee when a new expense is created
+2. **Status Change Notifications**: Sent to the employee and admins when expense status changes (Approve/Reject/Under Review)
+3. **Monthly Reports**: Automatically sent to all admins on the last day of each month with comprehensive expense statistics and Excel attachments
+
+#### Email Setup
+
+To enable email notifications, you need to configure EmailJS:
+
+1. Follow the detailed setup guide in `EMAIL_SETUP.md`
+2. Set up your EmailJS account and email templates
+3. Configure environment variables in `.env.local`
+
+See `EMAIL_SETUP.md` for complete setup instructions.
+
 ## Getting Started
 
-First, run the development server:
+First, install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+```
+
+Then, set up your environment variables by copying `.env.local.example` to `.env.local` and filling in your configuration.
+
+Run the development server:
+
+```bash
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
