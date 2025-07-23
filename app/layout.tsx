@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../context/AuthContext";
 import OfflineIndicator from "../components/OfflineIndicator";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,10 +74,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <OfflineIndicator />
-        <ThemeProvider>
-        {children}
-        </ThemeProvider>
+        <ErrorBoundary>
+          <OfflineIndicator />
+          <ThemeProvider>
+          {children}
+          </ThemeProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

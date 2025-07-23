@@ -26,6 +26,7 @@ const initialState = {
 };
 
 export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
+  const mounted = React.useRef(true);
   const { user } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState(initialState);
@@ -52,6 +53,24 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [showReviewAllModal, setShowReviewAllModal] = useState(false);
   const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
 
+  // Cleanup effect
+  React.useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Safe state setter to prevent updates after unmount
+  const safeSetState = (callback: () => void) => {
+    if (mounted.current) {
+      try {
+        callback();
+      } catch (error) {
+        console.error('State update error:', error);
+      }
+    }
+  };
+
   const total =
     [form.food, form.transport, form.hotel, form.fuel, form.site]
       .map(Number)
@@ -60,37 +79,37 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, files } = e.target as any;
-    setForm((prev) => ({
+    safeSetState(() => setForm((prev) => ({
       ...prev,
       [name]: files ? files[0] : value,
-    }));
+    })));
   };
 
   const handleOtherChange = (idx: number, field: 'label' | 'amount', value: string) => {
-    setForm((prev) => {
+    safeSetState(() => setForm((prev) => {
       const updated = [...prev.others];
       updated[idx] = { ...updated[idx], [field]: value };
       return { ...prev, others: updated };
-    });
+    }));
   };
 
   const addOtherField = () => {
-    setForm((prev) => ({ ...prev, others: [...prev.others, { label: '', amount: '' }] }));
+    safeSetState(() => setForm((prev) => ({ ...prev, others: [...prev.others, { label: '', amount: '' }] })));
   };
 
   const removeOtherField = (idx: number) => {
-    setForm((prev) => {
+    safeSetState(() => setForm((prev) => {
       const updated = [...prev.others];
       updated.splice(idx, 1);
       return { ...prev, others: updated };
-    });
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
+    safeSetState(() => setLoading(true));
+    safeSetState(() => setError(''));
+    safeSetState(() => setSuccess(''));
     
     const proofUrls: string[] = [];
 
@@ -151,15 +170,24 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         // Don't fail the expense submission if email fails
       }
       
-      setSuccess('Expense submitted successfully! Notifications have been sent.');
-      setForm(initialState);
-      setAdditionalProof([]); // Clear proof files
-      if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
+      if (mounted.current) {
+        safeSetState(() => setSuccess('Expense submitted successfully! Notifications have been sent.'));
+        safeSetState(() => setForm(initialState));
+        safeSetState(() => setAdditionalProof([])); // Clear proof files
+        if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
+        
+        // Delay navigation to prevent state updates after unmount
+        setTimeout(() => {
+          if (mounted.current) {
+            router.push('/');
+          }
+        }, 1000);
+      }
     } catch (err: any) {
       console.error('Expense submit error:', err);
-      setError(err.message || 'Error submitting expense');
+      safeSetState(() => setError(err.message || 'Error submitting expense'));
     } finally {
-      setLoading(false);
+      safeSetState(() => setLoading(false));
     }
   };
 
@@ -167,44 +195,51 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const handleFileInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
     if (!selectedCategory) {
       e.preventDefault();
-      setCategoryModalOpen(true);
+      safeSetState(() => setCategoryModalOpen(true));
     }
   };
 
   // When a category is selected, allow file input
   const handleCategorySelect = (cat: string) => {
-    setSelectedCategory(cat);
-    setCategoryModalOpen(false);
-    setFileInputKey(prev => prev + 1);
-    setBillOcrLoading(false);
-    setShouldTriggerFileInput(true);
+    safeSetState(() => setSelectedCategory(cat));
+    safeSetState(() => setCategoryModalOpen(false));
+    safeSetState(() => setFileInputKey(prev => prev + 1));
+    safeSetState(() => setBillOcrLoading(false));
+    safeSetState(() => setShouldTriggerFileInput(true));
   };
 
-  React.useEffect(() => {
-    if (shouldTriggerFileInput && fileInputRef.current) {
-      console.log('Triggering file input click (useEffect)');
-      fileInputRef.current.click();
-      setShouldTriggerFileInput(false);
-    }
-  }, [shouldTriggerFileInput, fileInputRef]);
+React.useEffect(() => {
+  if (shouldTriggerFileInput && fileInputRef.current) {
+    console.log('Triggering file input click (useEffect)');
+    fileInputRef.current.click();
+    safeSetState(() => setShouldTriggerFileInput(false));
+  }
+}, [shouldTriggerFileInput]);
 
   // Handle bill image(s) selection and OCR
   const handleBillImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('handleBillImageChange triggered');
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0) return;
-    setBillImages(files);
-    setBillOcrLoading(true);
-    setShowBillModal(false);
-    setCurrentBillIdx(0);
-    setShowReviewAllModal(false);
-    setBillAmounts(Array(files.length).fill(''));
-    setBillDates(Array(files.length).fill(''));
-    setBillOcrTexts(Array(files.length).fill(''));
+    
+    if (!mounted.current) return;
+    
+    safeSetState(() => setBillImages(files));
+    safeSetState(() => setBillOcrLoading(true));
+    safeSetState(() => setShowBillModal(false));
+    safeSetState(() => setCurrentBillIdx(0));
+    safeSetState(() => setShowReviewAllModal(false));
+    safeSetState(() => setBillAmounts(Array(files.length).fill('')));
+    safeSetState(() => setBillDates(Array(files.length).fill('')));
+    safeSetState(() => setBillOcrTexts(Array(files.length).fill('')));
+    
     const amounts: string[] = [];
     const dates: string[] = [];
     const ocrs: string[] = [];
+    
     for (let i = 0; i < files.length; i++) {
+      if (!mounted.current) return;
+      
       try {
         console.log('Starting OCR for file:', files[i]);
         const { data } = await Tesseract.recognize(files[i], 'eng', { logger: m => console.log(m) });
@@ -223,52 +258,58 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         amounts[i] = '';
         dates[i] = '';
         ocrs[i] = 'OCR failed';
-        setError('Text extraction failed for one or more images.');
+        safeSetState(() => setError('Text extraction failed for one or more images.'));
       }
     }
-    setBillAmounts(amounts);
-    setBillDates(dates);
-    setBillOcrTexts(ocrs);
-    setBillOcrLoading(false);
-    setCurrentBillIdx(0);
-    setShowBillModal(true);
-    setFileInputKey(prev => prev + 1);
-    if (e.target) e.target.value = '';
+    
+    if (mounted.current) {
+      safeSetState(() => setBillAmounts(amounts));
+      safeSetState(() => setBillDates(dates));
+      safeSetState(() => setBillOcrTexts(ocrs));
+      safeSetState(() => setBillOcrLoading(false));
+      safeSetState(() => setCurrentBillIdx(0));
+      safeSetState(() => setShowBillModal(true));
+      safeSetState(() => setFileInputKey(prev => prev + 1));
+      if (e.target) e.target.value = '';
+    }
   };
 
   // Move to next/prev image in review modal
-  const handleNextBill = () => setCurrentBillIdx(idx => Math.min(idx + 1, billImages.length - 1));
+  const handleNextBill = () => safeSetState(() => setCurrentBillIdx(idx => Math.min(idx + 1, billImages.length - 1)));
   const handlePrevBill = () => {
     if (currentBillIdx === 0) {
-      router.push('/');
+      if (mounted.current) {
+        router.push('/');
+      }
     } else {
-      setCurrentBillIdx(idx => Math.max(idx - 1, 0));
+      safeSetState(() => setCurrentBillIdx(idx => Math.max(idx - 1, 0)));
     }
   };
   const handleConfirmAllBills = () => {
-    setShowBillModal(false);
-    setShowReviewAllModal(true);
+    safeSetState(() => setShowBillModal(false));
+    safeSetState(() => setShowReviewAllModal(true));
   };
   const handleBackToReview = () => {
-    setShowReviewAllModal(false);
-    setShowBillModal(true);
+    safeSetState(() => setShowReviewAllModal(false));
+    safeSetState(() => setShowBillModal(true));
   };
 
   // Remove a bill image/amount
   const removeBillImage = (idx: number) => {
-    setBillImages(billImages.filter((_, i) => i !== idx));
-    setBillAmounts(billAmounts.filter((_, i) => i !== idx));
-    setBillDates(billDates.filter((_, i) => i !== idx));
-    setBillOcrTexts(billOcrTexts.filter((_, i) => i !== idx));
+    safeSetState(() => setBillImages(billImages.filter((_, i) => i !== idx)));
+    safeSetState(() => setBillAmounts(billAmounts.filter((_, i) => i !== idx)));
+    safeSetState(() => setBillDates(billDates.filter((_, i) => i !== idx)));
+    safeSetState(() => setBillOcrTexts(billOcrTexts.filter((_, i) => i !== idx)));
   };
 
   // Add expense from bill modal
   const handleAddBillExpense = async () => {
-    setShowBillModal(false);
-    setShowReviewAllModal(false);
-    setLoading(true);
-    setError('');
-    setSuccess('');
+    safeSetState(() => setShowBillModal(false));
+    safeSetState(() => setShowReviewAllModal(false));
+    safeSetState(() => setLoading(true));
+    safeSetState(() => setError(''));
+    safeSetState(() => setSuccess(''));
+    
     let billImageUrls: string[] = [];
     try {
       for (const file of billImages) {
@@ -298,31 +339,40 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       };
       const docRef = await addDoc(collection(db, 'expenses'), expenseData);
       console.log('Expense added:', { id: docRef.id, ...expenseData });
-      setSuccess('Expense submitted!');
-      setForm(initialState);
-      setBillImages([]);
-      setBillAmounts([]);
-      setBillDates([]);
-      setSelectedCategory('');
-      if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
+      
+      if (mounted.current) {
+        safeSetState(() => setSuccess('Expense submitted!'));
+        safeSetState(() => setForm(initialState));
+        safeSetState(() => setBillImages([]));
+        safeSetState(() => setBillAmounts([]));
+        safeSetState(() => setBillDates([]));
+        safeSetState(() => setSelectedCategory(''));
+        if (typeof props.onExpenseAdded === 'function') props.onExpenseAdded();
+        
+        // Delay navigation to prevent state updates after unmount
+        setTimeout(() => {
+          if (mounted.current) {
+            router.push('/');
+          }
+        }, 1000);
+      }
     } catch (err: any) {
-      setError(err.message || 'Error submitting expense');
+      safeSetState(() => setError(err.message || 'Error submitting expense'));
     } finally {
-      setLoading(false);
-      router.push('/');
+      safeSetState(() => setLoading(false));
     }
   };
 
   const handleAdditionalProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setAdditionalProof(Array.from(e.target.files));
+      safeSetState(() => setAdditionalProof(Array.from(e.target.files!)));
     }
   };
 
   // When closing the bill modal, also reset file input key
   const closeBillModal = () => {
-    setShowBillModal(false);
-    setFileInputKey(prev => prev + 1);
+    safeSetState(() => setShowBillModal(false));
+    safeSetState(() => setFileInputKey(prev => prev + 1));
   };
 
   return (

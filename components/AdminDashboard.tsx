@@ -7,8 +7,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Dialog } from '@headlessui/react';
 import { useAuth } from '../context/AuthContext';
-import { sendStatusChangeNotification, triggerMonthlyReport } from '../lib/emailService';
-import { useMonthlyReporting } from '../hooks/useMonthlyReporting';
+import { sendStatusChangeNotification } from '../lib/emailService';
 
 const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
@@ -300,20 +299,6 @@ export default function AdminDashboard() {
     categorySpend
   };
 
-  // Use the monthly reporting hook for automatic reports
-  useMonthlyReporting(expenses, adminStats);
-
-  // Manual monthly report trigger
-  const handleSendMonthlyReport = async () => {
-    try {
-      await triggerMonthlyReport(expenses, adminStats);
-      alert('Monthly report sent successfully to all admins!');
-    } catch (error) {
-      console.error('Error sending monthly report:', error);
-      alert('Failed to send monthly report. Please try again.');
-    }
-  };
-
   // Group expenses by user email
   const groupedByUser = expenses.reduce((acc, exp) => {
     const email = exp.user?.email || 'unknown';
@@ -466,7 +451,6 @@ export default function AdminDashboard() {
         </select>
         <Button onClick={fetchExpenses}>Refresh</Button>
         <Button onClick={handleDownloadMasterExcel} style={{ background: 'var(--accent)', color: 'var(--surface)' }}>Open in Excel</Button>
-        <Button onClick={handleSendMonthlyReport} style={{ background: '#10b981', color: '#ffffff' }}>Send Monthly Report</Button>
         {/* <Button onClick={() => setShowClearConfirm(true)} style={{ background: '#ef4444', color: '#ffffff' }}>Clear All Expenses</Button> */}
       </div>
       <table className="min-w-full text-sm border-separate border-spacing-y-2">
