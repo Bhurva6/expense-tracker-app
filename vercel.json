@@ -2,6 +2,5 @@
   "buildCommand": "pnpm run build-pwa",
   "outputDirectory": ".next",
   "installCommand": "pnpm install",
-  "framework": "nextjs",
-  "nodejs": "18.x"
+  "framework": "nextjs"
 }
