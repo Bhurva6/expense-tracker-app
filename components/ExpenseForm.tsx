@@ -48,6 +48,14 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [billOcrLoading, setBillOcrLoading] = useState(false);
   const [billDates, setBillDates] = useState<string[]>([]);
   const [showBillModal, setShowBillModal] = useState(false);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    address: string;
+    timestamp: string;
+  } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [billOcrTexts, setBillOcrTexts] = useState<string[]>([]);
   const [currentBillIdx, setCurrentBillIdx] = useState(0);
   const [showReviewAllModal, setShowReviewAllModal] = useState(false);
@@ -105,6 +113,110 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     }));
   };
 
+  // Location tracking functions
+  const getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported by this browser'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          let errorMessage = 'Unable to retrieve location';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location access denied by user';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out';
+              break;
+          }
+          reject(new Error(errorMessage));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000, // 5 minutes cache
+        }
+      );
+    });
+  };
+
+  const getAddressFromCoordinates = async (lat: number, lng: number): Promise<string> => {
+    try {
+      // Use a free reverse geocoding service that doesn't require API key
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'ExpenseTracker/1.0'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      }
+
+      const data = await response.json();
+      if (data.display_name) {
+        return data.display_name;
+      }
+      
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    } catch (error) {
+      console.error('Error getting address:', error);
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+  };
+
+  const captureLocation = async () => {
+    setLocationLoading(true);
+    setLocationError('');
+    
+    try {
+      const coords = await getCurrentLocation();
+      const address = await getAddressFromCoordinates(coords.latitude, coords.longitude);
+      
+      const locationData = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: address,
+        timestamp: new Date().toLocaleString(),
+      };
+      
+      setLocation(locationData);
+      setLocationError('');
+    } catch (error: any) {
+      console.error('Location capture error:', error);
+      setLocationError(error.message || 'Failed to capture location');
+      // Set a fallback location with error message
+      setLocation({
+        latitude: 0,
+        longitude: 0,
+        address: 'Location unavailable',
+        timestamp: new Date().toLocaleString(),
+      });
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  // Auto-capture location when component mounts
+  useEffect(() => {
+    captureLocation();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     safeSetState(() => setLoading(true));
@@ -136,6 +248,12 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           uid: user?.uid,
           name: user?.displayName,
           email: user?.email,
+        },
+        location: location || {
+          latitude: 0,
+          longitude: 0,
+          address: 'Location not available',
+          timestamp: new Date().toLocaleString(),
         },
         createdAt: Timestamp.now(),
       };
@@ -335,6 +453,12 @@ React.useEffect(() => {
           name: user?.displayName,
           email: user?.email,
         },
+        location: location || {
+          latitude: 0,
+          longitude: 0,
+          address: 'Location not available',
+          timestamp: new Date().toLocaleString(),
+        },
         createdAt: Timestamp.now(),
       };
       const docRef = await addDoc(collection(db, 'expenses'), expenseData);
@@ -380,6 +504,44 @@ React.useEffect(() => {
       {/* Left: Expense Form */}
       <Card className="p-4 sm:p-6 w-full">
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Location Display */}
+          <div className="mb-4 p-3 rounded-lg border" style={{ background: 'var(--accent-light)', borderColor: 'var(--muted)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--primary)' }}>📍 Current Location</h3>
+              <button
+                type="button"
+                onClick={captureLocation}
+                disabled={locationLoading}
+                className="text-xs px-2 py-1 rounded border"
+                style={{ 
+                  background: locationLoading ? 'var(--muted)' : 'var(--primary)', 
+                  color: 'var(--surface)',
+                  borderColor: 'var(--primary)'
+                }}
+              >
+                {locationLoading ? '🔄 Getting...' : '🔄 Refresh'}
+              </button>
+            </div>
+            {locationError ? (
+              <div className="text-xs text-red-500 mb-1">⚠️ {locationError}</div>
+            ) : null}
+            {location ? (
+              <div className="space-y-1">
+                <div className="text-xs" style={{ color: 'var(--foreground)' }}>
+                  <strong>Address:</strong> {location.address}
+                </div>
+                <div className="text-xs text-gray-500">
+                  <strong>Coordinates:</strong> {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  <strong>Captured:</strong> {location.timestamp}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-gray-500">Location not captured yet...</div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input type="date" name="date" value={form.date} onChange={handleChange} required label="Date" />
             <Input name="food" value={form.food} onChange={handleChange} label="Food" type="number" min="0" />
