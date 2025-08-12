@@ -553,50 +553,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Email System Testing */}
-      <div className="mb-8 p-6 rounded-lg shadow-md" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold" style={{ color: 'var(--primary)' }}>Email System Management</h3>
-          <button
-            onClick={() => setShowEmailTest(!showEmailTest)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200"
-            style={{ 
-              background: showEmailTest ? 'var(--primary)' : 'var(--surface)', 
-              color: showEmailTest ? 'var(--surface)' : 'var(--foreground)',
-              borderColor: 'var(--primary)'
-            }}
-          >
-            {showEmailTest ? (
-              <>
-                📧 Hide Email Tests
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                </svg>
-              </>
-            ) : (
-              <>
-                🧪 Show Email Tests
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </>
-            )}
-          </button>
-        </div>
-        {showEmailTest && <EmailTestComponent />}
-        {!showEmailTest && (
-          <div className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-            <p>Email notifications are automatically sent for:</p>
-            <ul className="list-disc list-inside mt-2 space-y-1">
-              <li>✅ New expense submissions (to employee + all admins)</li>
-              <li>📝 Expense status changes (to employee + all admins)</li>
-              <li>💰 Expense closures/payments (to employee + all admins)</li>
-            </ul>
-            <p className="mt-2">Click "Show Email Tests" to configure and test the email system.</p>
-          </div>
-        )}
-      </div>
-
       {/* Expenses Table */}
       <div className="shadow-lg rounded-lg overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
         <div className="p-6">
