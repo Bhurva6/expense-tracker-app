@@ -12,7 +12,6 @@ const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
   'neetu@panachegreen.com',
-  'kunal.nihalani@icloud.com',
   'hrd@panachegreen.com',
   'brijesh@panachegreen.com',
   'accounts@panachegreen.com',

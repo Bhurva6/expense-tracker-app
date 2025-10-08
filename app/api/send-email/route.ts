@@ -10,7 +10,6 @@ const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
   'neetu@panachegreen.com',
-  'kunal.nihalani@icloud.com',
   'hrd@panachegreen.com',
   'brijesh@panachegreen.com',
   'accounts@panachegreen.com',
@@ -18,11 +17,17 @@ const ADMIN_EMAILS = [
 
 // Create transporter
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
+  // Add timeout and connection settings
+  connectionTimeout: 60000, // 60 seconds
+  greetingTimeout: 30000, // 30 seconds
+  socketTimeout: 60000, // 60 seconds
 });
 
 interface ExpenseData {
@@ -262,6 +267,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields: type and expense' },
         { status: 400 }
+      );
+    }
+
+    // Validate email configuration
+    if (!EMAIL_USER || EMAIL_USER === 'your-email@gmail.com') {
+      return NextResponse.json(
+        { error: 'Email configuration incomplete: GMAIL_USER not set or using default value' },
+        { status: 500 }
+      );
+    }
+
+    if (!EMAIL_PASS || EMAIL_PASS === 'your-app-password') {
+      return NextResponse.json(
+        { error: 'Email configuration incomplete: GMAIL_APP_PASSWORD not set or using default value' },
+        { status: 500 }
       );
     }
 

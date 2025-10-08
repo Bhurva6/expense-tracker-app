@@ -13,7 +13,6 @@ import EmailTestComponent from './EmailTestComponent';
 const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
   'neetu@panachegreen.com',
-  'kunal.nihalani@icloud.com',
   'hrd@panachegreen.com',
   'brijesh@panachegreen.com',
   'accounts@panachegreen.com',];
@@ -976,13 +975,47 @@ export default function AdminDashboard() {
                 {/* Expense Breakdown */}
                 <h3 className="text-lg font-semibold" style={{ color: 'var(--primary)' }}>Expense Breakdown</h3>
                 <div className="space-y-2 p-4 rounded" style={{ background: 'var(--accent-light)' }}>
-                  {previewExpense.hotel && <div><b style={{ color: 'var(--primary)' }}>Hotel:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.hotel}</span></div>}
-                  {previewExpense.transport && <div><b style={{ color: 'var(--primary)' }}>Transport:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.transport}</span></div>}
-                  {previewExpense.fuel && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.fuel}</span></div>}
-                  {previewExpense.meals && <div><b style={{ color: 'var(--primary)' }}>Meals:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.meals}</span></div>}
-                  {previewExpense.entertainment && <div><b style={{ color: 'var(--primary)' }}>Entertainment:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.entertainment}</span></div>}
-                  {previewExpense.site && <div><b style={{ color: 'var(--primary)' }}>Site:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.site}</span></div>}
-                  {previewExpense.food && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{previewExpense.food}</span></div>}
+                  <div><b style={{ color: 'var(--primary)' }}>Category:</b> <span style={{ color: 'var(--foreground)' }}>{previewExpense.category || 'Not specified'}</span></div>
+                  {previewExpense.category === 'personal' && (
+                    <>
+                      {previewExpense.food && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.food).toLocaleString()}</span></div>}
+                      {previewExpense.fuel && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.fuel).toLocaleString()}</span></div>}
+                      {previewExpense.entertainment && <div><b style={{ color: 'var(--primary)' }}>Entertainment:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.entertainment).toLocaleString()}</span></div>}
+                      {previewExpense.utility && <div><b style={{ color: 'var(--primary)' }}>Utility:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.utility).toLocaleString()}</span></div>}
+                      {previewExpense.home && <div><b style={{ color: 'var(--primary)' }}>Home:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.home).toLocaleString()}</span></div>}
+                      {previewExpense.travel && <div><b style={{ color: 'var(--primary)' }}>Travel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.travel).toLocaleString()}</span></div>}
+                      {previewExpense.grocery && <div><b style={{ color: 'var(--primary)' }}>Grocery:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.grocery).toLocaleString()}</span></div>}
+                    </>
+                  )}
+                  {previewExpense.category === 'official' && (
+                    <>
+                      {previewExpense.food && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.food).toLocaleString()}</span></div>}
+                      {previewExpense.fuel && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.fuel).toLocaleString()}</span></div>}
+                      {previewExpense.transport && <div><b style={{ color: 'var(--primary)' }}>Transport:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.transport).toLocaleString()}</span></div>}
+                      {previewExpense.hotel && <div><b style={{ color: 'var(--primary)' }}>Hotel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.hotel).toLocaleString()}</span></div>}
+                    </>
+                  )}
+                  {previewExpense.category === 'site' && (
+                    <>
+                      {previewExpense.siteName && <div><b style={{ color: 'var(--primary)' }}>Site Name:</b> <span style={{ color: 'var(--foreground)' }}>{previewExpense.siteName}</span></div>}
+                      {previewExpense.labour && <div><b style={{ color: 'var(--primary)' }}>Labour:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.labour).toLocaleString()}</span></div>}
+                      {previewExpense.travel && <div><b style={{ color: 'var(--primary)' }}>Travel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.travel).toLocaleString()}</span></div>}
+                      {previewExpense.tools && <div><b style={{ color: 'var(--primary)' }}>Tools:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.tools).toLocaleString()}</span></div>}
+                      {previewExpense.consumables && <div><b style={{ color: 'var(--primary)' }}>Consumables:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.consumables).toLocaleString()}</span></div>}
+                      {previewExpense.stay && <div><b style={{ color: 'var(--primary)' }}>Stay:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.stay).toLocaleString()}</span></div>}
+                      {previewExpense.transportOfMaterial && <div><b style={{ color: 'var(--primary)' }}>Transport of Material:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.transportOfMaterial).toLocaleString()}</span></div>}
+                      {previewExpense.localCommute && <div><b style={{ color: 'var(--primary)' }}>Local Commute:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.localCommute).toLocaleString()}</span></div>}
+                    </>
+                  )}
+                  {(!previewExpense.category || previewExpense.category === '') && previewExpense.others && previewExpense.others.length > 0 && (
+                    <>
+                      {previewExpense.others.map((other: any, idx: number) => (
+                        <div key={idx}>
+                          <b style={{ color: 'var(--primary)' }}>{other.label || `Other ${idx + 1}`}:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(other.amount).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
 
                 {/* Admin Actions in Modal */}
@@ -1144,4 +1177,4 @@ export default function AdminDashboard() {
       </Card>
     </div>
   );
-} 
+}

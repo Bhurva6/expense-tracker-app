@@ -49,4 +49,25 @@ export function Card({ className = '', children }: { className?: string; childre
       {children}
     </div>
   );
-} 
+}
+
+export function Select({ label, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
+  return (
+    <label className="block" style={{ color: 'var(--foreground)' }}>
+      {label && <span className="block mb-1 text-sm font-semibold" style={{ color: 'var(--secondary)' }}>{label}</span>}
+      <select
+        className="themed-input w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
+        style={{
+          background: 'var(--surface)',
+          color: 'var(--foreground)',
+          borderColor: 'var(--muted)',
+          fontFamily: 'var(--font-sans)',
+          boxShadow: 'none',
+        }}
+        {...props}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
