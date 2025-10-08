@@ -17,12 +17,13 @@ const ADMIN_EMAILS = [
 ];
 
 function MainPage() {
-  const { user, loading, signIn, signInWithPhone, verifyOTP, signOutUser, confirmationResult, phoneSignInLoading, clearRecaptcha } = useAuth();
+  const { user, loading, signIn, signInWithPhone, verifyOTP, signOutUser, confirmationResult, phoneSignInLoading, clearRecaptcha, updateDisplayName } = useAuth();
   const [activeTab, setActiveTab] = useState<'add' | 'track' | 'admin'>('add');
   const [loginMethod, setLoginMethod] = useState<'google' | 'phone'>('google');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [showOtpInput, setShowOtpInput] = useState(false);
+  const [phoneName, setPhoneName] = useState('');
 
   if (loading) return <div>Loading...</div>;
   if (!user)
@@ -45,6 +46,7 @@ function MainPage() {
               setShowOtpInput(false);
               setPhoneNumber('');
               setOtp('');
+              setPhoneName('');
             }}
             className={`px-4 py-2 rounded ${loginMethod === 'google' ? 'text-white' : ''}`}
             style={{ background: loginMethod === 'google' ? 'var(--primary)' : 'var(--surface)', color: loginMethod === 'google' ? 'var(--surface)' : 'var(--foreground)' }}
@@ -55,6 +57,10 @@ function MainPage() {
             onClick={() => {
               setLoginMethod('phone');
               clearRecaptcha();
+              setShowOtpInput(false);
+              setPhoneNumber('');
+              setOtp('');
+              setPhoneName('');
             }}
             className={`px-4 py-2 rounded ${loginMethod === 'phone' ? 'text-white' : ''}`}
             style={{ background: loginMethod === 'phone' ? 'var(--primary)' : 'var(--surface)', color: loginMethod === 'phone' ? 'var(--surface)' : 'var(--foreground)' }}
@@ -69,24 +75,35 @@ function MainPage() {
         )}
         {loginMethod === 'phone' && !showOtpInput && (
           <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center border rounded" style={{ borderColor: 'var(--primary)' }}>
+              <span className="px-2 py-2" style={{ background: 'var(--accent-light)' }}>+91</span>
+              <input
+                type="tel"
+                placeholder="Enter 10-digit number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                className="px-4 py-2 flex-1"
+                style={{ border: 'none', outline: 'none' }}
+              />
+            </div>
             <input
-              type="tel"
-              placeholder="Enter phone number (+1234567890)"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              type="text"
+              placeholder="Enter your name"
+              value={phoneName}
+              onChange={(e) => setPhoneName(e.target.value)}
               className="px-4 py-2 border rounded"
               style={{ borderColor: 'var(--primary)' }}
             />
             <button
               onClick={async () => {
                 try {
-                  await signInWithPhone(phoneNumber);
+                  await signInWithPhone('+91' + phoneNumber);
                   setShowOtpInput(true);
                 } catch (error) {
                   alert('Error sending OTP. Please try again.');
                 }
               }}
-              disabled={phoneSignInLoading || !phoneNumber}
+              disabled={phoneSignInLoading || phoneNumber.length !== 10 || !phoneName.trim()}
               className="text-white px-4 py-2 rounded disabled:opacity-50"
               style={{ background: 'var(--primary)' }}
             >
@@ -97,25 +114,28 @@ function MainPage() {
         {loginMethod === 'phone' && showOtpInput && (
           <div className="flex flex-col items-center gap-4">
             <input
-              type="text"
+              type="number"
               placeholder="Enter OTP"
               value={otp}
-              onChange={(e) => setOtp(e.target.value)}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               className="px-4 py-2 border rounded"
               style={{ borderColor: 'var(--primary)' }}
+              inputMode="numeric"
             />
             <button
               onClick={async () => {
                 try {
                   await verifyOTP(otp);
+                  await updateDisplayName(phoneName.trim());
                   setShowOtpInput(false);
                   setPhoneNumber('');
                   setOtp('');
+                  setPhoneName('');
                 } catch (error) {
                   alert('Invalid OTP. Please try again.');
                 }
               }}
-              disabled={phoneSignInLoading || !otp}
+              disabled={phoneSignInLoading || otp.length !== 6}
               className="text-white px-4 py-2 rounded disabled:opacity-50"
               style={{ background: 'var(--primary)' }}
             >

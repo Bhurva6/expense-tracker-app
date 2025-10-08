@@ -1,6 +1,6 @@
 'use client';
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult, updateProfile } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
 const RecaptchaContainer = React.forwardRef<HTMLDivElement>((props, ref) => {
@@ -17,6 +17,7 @@ interface AuthContextType {
   confirmationResult: ConfirmationResult | null;
   phoneSignInLoading: boolean;
   clearRecaptcha: () => void;
+  updateDisplayName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -114,8 +115,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setConfirmationResult(null);
   };
 
+  const updateDisplayName = async (name: string) => {
+    if (user) {
+      await updateProfile(user, { displayName: name });
+      // Force a re-render or update user state if needed, but Firebase should handle it
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signInWithPhone, verifyOTP, signOutUser, confirmationResult, phoneSignInLoading, clearRecaptcha }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signInWithPhone, verifyOTP, signOutUser, confirmationResult, phoneSignInLoading, clearRecaptcha, updateDisplayName }}>
       {children}
       <RecaptchaContainer ref={recaptchaContainerRef} />
     </AuthContext.Provider>
