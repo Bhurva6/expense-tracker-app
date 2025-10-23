@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import ExpenseForm from '../components/ExpenseForm';
@@ -16,14 +16,50 @@ const ADMIN_EMAILS = [
   'accounts@panachegreen.com',
 ];
 
+const MOTIVATIONAL_QUOTES = [
+  "Success is not the key to happiness. Happiness is the key to success.",
+  "The only way to do great work is to love what you do.",
+  "Don’t watch the clock; do what it does. Keep going.",
+  "Opportunities don't happen, you create them.",
+  "The harder you work for something, the greater you'll feel when you achieve it.",
+  "Dream bigger. Do bigger.",
+  "Don’t stop when you’re tired. Stop when you’re done.",
+  "Great things never come from comfort zones.",
+  "Push yourself, because no one else is going to do it for you.",
+  "Success doesn’t just find you. You have to go out and get it."
+];
+
 function MainPage() {
   const { user, loading, signIn, signInWithPhone, verifyOTP, signOutUser, confirmationResult, phoneSignInLoading, clearRecaptcha, updateDisplayName } = useAuth();
   const [activeTab, setActiveTab] = useState<'add' | 'track' | 'admin'>('add');
   const [loginMethod, setLoginMethod] = useState<'google' | 'phone'>('google');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [phoneName, setPhoneName] = useState('');
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+
+  const randomQuote = useMemo(() => {
+    return MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
+  }, []);
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (value.length > 1) return; // Only allow single digit
+    const newOtp = [...otp];
+    newOtp[index] = value.replace(/\D/g, ''); // Only digits
+    setOtp(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    }
+  };
 
   if (loading) return <div>Loading...</div>;
   if (!user)
@@ -45,7 +81,7 @@ function MainPage() {
               clearRecaptcha();
               setShowOtpInput(false);
               setPhoneNumber('');
-              setOtp('');
+              setOtp(['', '', '', '', '', '']);
               setPhoneName('');
             }}
             className={`px-4 py-2 rounded ${loginMethod === 'google' ? 'text-white' : ''}`}
@@ -59,7 +95,7 @@ function MainPage() {
               clearRecaptcha();
               setShowOtpInput(false);
               setPhoneNumber('');
-              setOtp('');
+              setOtp(['', '', '', '', '', '']);
               setPhoneName('');
             }}
             className={`px-4 py-2 rounded ${loginMethod === 'phone' ? 'text-white' : ''}`}
@@ -113,29 +149,36 @@ function MainPage() {
         )}
         {loginMethod === 'phone' && showOtpInput && (
           <div className="flex flex-col items-center gap-4">
-            <input
-              type="number"
-              placeholder="Enter OTP"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="px-4 py-2 border rounded"
-              style={{ borderColor: 'var(--primary)' }}
-              inputMode="numeric"
-            />
+            <div className="flex gap-2">
+              {otp.map((digit, index) => (
+                <input
+                  key={index}
+                  type="number"
+                  value={digit}
+                  onChange={(e) => handleOtpChange(index, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                  className="w-12 h-12 text-center border rounded"
+                  style={{ borderColor: 'var(--primary)' }}
+                  inputMode="numeric"
+                  maxLength={1}
+                  ref={(el) => { otpInputsRef.current[index] = el; }}
+                />
+              ))}
+            </div>
             <button
               onClick={async () => {
                 try {
-                  await verifyOTP(otp);
+                  await verifyOTP(otp.join(''));
                   await updateDisplayName(phoneName.trim());
                   setShowOtpInput(false);
                   setPhoneNumber('');
-                  setOtp('');
+                  setOtp(['', '', '', '', '', '']);
                   setPhoneName('');
                 } catch (error) {
                   alert('Invalid OTP. Please try again.');
                 }
               }}
-              disabled={phoneSignInLoading || otp.length !== 6}
+              disabled={phoneSignInLoading || otp.some(d => d === '')}
               className="text-white px-4 py-2 rounded disabled:opacity-50"
               style={{ background: 'var(--primary)' }}
             >
@@ -177,7 +220,14 @@ function MainPage() {
           </button>
         )}
       </div>
-      {activeTab === 'add' && <ExpenseForm onExpenseAdded={() => setActiveTab('track')} />}
+      {activeTab === 'add' && (
+        <>
+          <div className="mb-6 text-center text-lg italic text-gray-700" style={{ color: 'var(--primary)' }}>
+            "{randomQuote}"
+          </div>
+          <ExpenseForm onExpenseAdded={() => setActiveTab('track')} />
+        </>
+      )}
       {activeTab === 'track' && <ExpenseTable />}
       {isAdmin && activeTab === 'admin' && <AdminDashboard />}
     </div>

@@ -5,13 +5,14 @@ export function Input({ label, ...props }: React.InputHTMLAttributes<HTMLInputEl
     <label className="block" style={{ color: 'var(--foreground)' }}>
       {label && <span className="block mb-1 text-sm font-semibold" style={{ color: 'var(--secondary)' }}>{label}</span>}
       <input
-        className="themed-input w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
+        className="themed-input w-full px-4 py-3 border rounded focus:outline-none focus:ring-2 text-base"
         style={{
           background: 'var(--surface)',
           color: 'var(--foreground)',
-          borderColor: 'var(--muted)',
+          border: '1px solid black',
           fontFamily: 'var(--font-sans)',
           boxShadow: 'none',
+          minHeight: '45px',
         }}
         {...props}
       />

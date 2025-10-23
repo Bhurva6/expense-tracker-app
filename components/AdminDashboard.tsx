@@ -26,6 +26,7 @@ export default function AdminDashboard() {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterEmployee, setFilterEmployee] = useState('');
+  const [filterSite, setFilterSite] = useState('');
   const [previewExpense, setPreviewExpense] = useState<any | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [remarksDraft, setRemarksDraft] = useState<Record<string, string>>({});
@@ -69,6 +70,12 @@ export default function AdminDashboard() {
         );
       }
       
+      if (filterSite) {
+        filteredExpenses = filteredExpenses.filter((exp: any) => 
+          exp.siteName === filterSite
+        );
+      }
+      
       setExpenses(filteredExpenses);
     } catch (err: any) {
       setError(err.message || 'Error fetching expenses');
@@ -80,7 +87,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchExpenses();
     // eslint-disable-next-line
-  }, [filterMonth, filterDept, filterEmployee]);
+  }, [filterMonth, filterDept, filterEmployee, filterSite]);
 
   const handleStatusChange = async (id: string, status: string) => {
     const actionBy = {
@@ -496,7 +503,7 @@ export default function AdminDashboard() {
                 <>
                   📋 Compact View
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </>
               )}

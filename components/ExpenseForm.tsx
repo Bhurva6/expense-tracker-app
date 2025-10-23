@@ -65,50 +65,59 @@ const FileUploadArea = ({
   </div>
 );
 
-const initialState = {
+type ExpenseFormState = {
+  date: string;
+  category: string;
+  food: { amount: string; files: File[] }[];
+  fuel: { amount: string; files: File[] }[];
+  entertainment: { amount: string; files: File[] }[];
+  utility: { amount: string; files: File[] }[];
+  home: { amount: string; files: File[] }[];
+  travel: { amount: string; files: File[] }[];
+  grocery: { amount: string; files: File[] }[];
+  transport: { amount: string; files: File[] }[];
+  hotel: { amount: string; files: File[] }[];
+  siteName: string;
+  labour: { amount: string; files: File[] }[];
+  tools: { amount: string; files: File[] }[];
+  consumables: { amount: string; files: File[] }[];
+  stay: { amount: string; files: File[] }[];
+  transportOfMaterial: { amount: string; files: File[] }[];
+  localCommute: { amount: string; files: File[] }[];
+  notes: string;
+  file: File | null;
+  others: { label: string; amount: string; files: File[] }[];
+};
+
+const initialState: ExpenseFormState = {
   date: "",
   category: "",
-  food: "",
-  fuel: "",
-  entertainment: "",
-  utility: "",
-  home: "",
-  travel: "",
-  grocery: "",
-  transport: "",
-  hotel: "",
+  food: [{ amount: "", files: [] }],
+  fuel: [{ amount: "", files: [] }],
+  entertainment: [{ amount: "", files: [] }],
+  utility: [{ amount: "", files: [] }],
+  home: [{ amount: "", files: [] }],
+  travel: [{ amount: "", files: [] }],
+  grocery: [{ amount: "", files: [] }],
+  transport: [{ amount: "", files: [] }],
+  hotel: [{ amount: "", files: [] }],
   siteName: "",
-  labour: "",
-  tools: "",
-  consumables: "",
-  stay: "",
-  transportOfMaterial: "",
-  localCommute: "",
+  labour: [{ amount: "", files: [] }],
+  tools: [{ amount: "", files: [] }],
+  consumables: [{ amount: "", files: [] }],
+  stay: [{ amount: "", files: [] }],
+  transportOfMaterial: [{ amount: "", files: [] }],
+  localCommute: [{ amount: "", files: [] }],
   notes: "",
   file: null as File | null,
-  foodFiles: [] as File[],
-  fuelFiles: [] as File[],
-  entertainmentFiles: [] as File[],
-  utilityFiles: [] as File[],
-  homeFiles: [] as File[],
-  travelFiles: [] as File[],
-  groceryFiles: [] as File[],
-  transportFiles: [] as File[],
-  hotelFiles: [] as File[],
-  labourFiles: [] as File[],
-  toolsFiles: [] as File[],
-  consumablesFiles: [] as File[],
-  stayFiles: [] as File[],
-  transportOfMaterialFiles: [] as File[],
-  localCommuteFiles: [] as File[],
-  others: [] as { label: string; amount: string }[],
+  others: [{ label: "", amount: "", files: [] }],
 };
 
 export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const mounted = React.useRef(true);
   const { user } = useAuth();
   const router = useRouter();
-  const [form, setForm] = useState(initialState);
+  const [form, setForm] = useState<ExpenseFormState>(initialState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -135,7 +144,6 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [billOcrTexts, setBillOcrTexts] = useState<string[]>([]);
   const [currentBillIdx, setCurrentBillIdx] = useState(0);
   const [showReviewAllModal, setShowReviewAllModal] = useState(false);
-  const [shouldTriggerFileInput, setShouldTriggerFileInput] = useState(false);
   const [foodFiles, setFoodFiles] = useState<File[]>([]);
   const [fuelFiles, setFuelFiles] = useState<File[]>([]);
   const [entertainmentFiles, setEntertainmentFiles] = useState<File[]>([]);
@@ -158,6 +166,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [siteNames, setSiteNames] = useState<string[]>([]);
 
   // Cleanup effect
   React.useEffect(() => {
@@ -180,31 +189,31 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const total =
     form.category === "personal"
       ? [
-          form.food,
-          form.fuel,
-          form.entertainment,
-          form.utility,
-          form.home,
-          form.travel,
-          form.grocery,
+          ...form.food,
+          ...form.fuel,
+          ...form.entertainment,
+          ...form.utility,
+          ...form.home,
+          ...form.travel,
+          ...form.grocery,
         ]
-          .map(Number)
+          .map((item) => Number(item.amount))
           .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
       : form.category === "official"
-      ? [form.food, form.fuel, form.transport, form.hotel]
-          .map(Number)
+      ? [...form.food, ...form.fuel, ...form.transport, ...form.hotel]
+          .map((item) => Number(item.amount))
           .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
       : form.category === "site"
       ? [
-          form.labour,
-          form.travel,
-          form.tools,
-          form.consumables,
-          form.stay,
-          form.transportOfMaterial,
-          form.localCommute,
+          ...form.labour,
+          ...form.travel,
+          ...form.tools,
+          ...form.consumables,
+          ...form.stay,
+          ...form.transportOfMaterial,
+          ...form.localCommute,
         ]
-          .map(Number)
+          .map((item) => Number(item.amount))
           .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
       : form.others.reduce((sum, o) => sum + (parseFloat(o.amount) || 0), 0);
 
@@ -234,20 +243,56 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     );
   };
 
-  const addOtherField = () => {
-    safeSetState(() =>
-      setForm((prev) => ({
-        ...prev,
-        others: [...prev.others, { label: "", amount: "" }],
-      }))
-    );
+  const addItem = (field: keyof typeof initialState) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: [
+        ...(prev[field] as { amount: string; files: File[] }[]),
+        { amount: "", files: [] },
+      ],
+    }));
   };
 
-  const removeOtherField = (idx: number) => {
+  const removeItem = (field: keyof typeof initialState, idx: number) => {
+    setForm((prev) => {
+      const items = [...(prev[field] as { amount: string; files: File[] }[])];
+      // Don't remove if it's the last item
+      if (items.length <= 1) return prev;
+      items.splice(idx, 1);
+      return { ...prev, [field]: items };
+    });
+  };
+
+  const handleItemChange = (
+    field: keyof typeof initialState,
+    idx: number,
+    subfield: "amount",
+    value: string
+  ) => {
+    setForm((prev) => {
+      const updated = [...(prev[field] as { amount: string; files: File[] }[])];
+      updated[idx] = { ...updated[idx], [subfield]: value };
+      return { ...prev, [field]: updated };
+    });
+  };
+
+  const handleItemFilesChange = (
+    field: keyof typeof initialState,
+    idx: number,
+    files: File[]
+  ) => {
+    setForm((prev) => {
+      const updated = [...(prev[field] as { amount: string; files: File[] }[])];
+      updated[idx] = { ...updated[idx], files };
+      return { ...prev, [field]: updated };
+    });
+  };
+
+  const handleOtherFilesChange = (idx: number, files: File[]) => {
     safeSetState(() =>
       setForm((prev) => {
         const updated = [...prev.others];
-        updated.splice(idx, 1);
+        updated[idx] = { ...updated[idx], files };
         return { ...prev, others: updated };
       })
     );
@@ -366,6 +411,28 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     captureLocation();
   }, []);
 
+  // Fetch existing site names
+  useEffect(() => {
+    const fetchSiteNames = async () => {
+      try {
+        const { getDocs, collection, query } = await import('firebase/firestore');
+        const q = query(collection(db, 'expenses'));
+        const snapshot = await getDocs(q);
+        const sites = new Set<string>();
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.siteName && data.siteName.trim()) {
+            sites.add(data.siteName.trim());
+          }
+        });
+        setSiteNames(Array.from(sites).sort());
+      } catch (error) {
+        console.error('Error fetching site names:', error);
+      }
+    };
+    fetchSiteNames();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -375,23 +442,24 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     const proofUrls: string[] = [];
 
     try {
-      // Collect all files from individual field arrays
+      // Collect all files from form arrays
       const allFiles = [
-        ...foodFiles,
-        ...fuelFiles,
-        ...entertainmentFiles,
-        ...utilityFiles,
-        ...homeFiles,
-        ...travelFiles,
-        ...groceryFiles,
-        ...transportFiles,
-        ...hotelFiles,
-        ...labourFiles,
-        ...toolsFiles,
-        ...consumablesFiles,
-        ...stayFiles,
-        ...transportOfMaterialFiles,
-        ...localCommuteFiles,
+        ...form.food.flatMap((item) => item.files),
+        ...form.fuel.flatMap((item) => item.files),
+        ...form.entertainment.flatMap((item) => item.files),
+        ...form.utility.flatMap((item) => item.files),
+        ...form.home.flatMap((item) => item.files),
+        ...form.travel.flatMap((item) => item.files),
+        ...form.grocery.flatMap((item) => item.files),
+        ...form.transport.flatMap((item) => item.files),
+        ...form.hotel.flatMap((item) => item.files),
+        ...form.labour.flatMap((item) => item.files),
+        ...form.tools.flatMap((item) => item.files),
+        ...form.consumables.flatMap((item) => item.files),
+        ...form.stay.flatMap((item) => item.files),
+        ...form.transportOfMaterial.flatMap((item) => item.files),
+        ...form.localCommute.flatMap((item) => item.files),
+        ...form.others.flatMap((item) => item.files),
       ];
 
       if (allFiles.length > 0) {
@@ -445,34 +513,47 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         purpose: expenseData.notes || "General expense", // Using notes as purpose for now
         hotel:
           form.category === "personal"
-            ? Number(form.home)
+            ? form.home.reduce((sum, item) => sum + Number(item.amount), 0)
             : form.category === "official"
-            ? Number(form.hotel)
+            ? form.hotel.reduce((sum, item) => sum + Number(item.amount), 0)
             : form.category === "site"
-            ? Number(form.stay)
+            ? form.stay.reduce((sum, item) => sum + Number(item.amount), 0)
             : 0,
         transport:
           form.category === "personal"
-            ? Number(form.travel)
+            ? form.travel.reduce((sum, item) => sum + Number(item.amount), 0)
             : form.category === "official"
-            ? Number(form.transport)
+            ? form.transport.reduce((sum, item) => sum + Number(item.amount), 0)
             : form.category === "site"
-            ? Number(form.transportOfMaterial) + Number(form.localCommute)
+            ? form.transportOfMaterial.reduce(
+                (sum, item) => sum + Number(item.amount),
+                0
+              ) +
+              form.localCommute.reduce(
+                (sum, item) => sum + Number(item.amount),
+                0
+              )
             : 0,
         fuel:
           form.category === "personal"
-            ? Number(form.fuel)
+            ? form.fuel.reduce((sum, item) => sum + Number(item.amount), 0)
             : form.category === "official"
-            ? Number(form.fuel)
+            ? form.fuel.reduce((sum, item) => sum + Number(item.amount), 0)
             : 0,
         meals:
           form.category === "personal"
-            ? Number(form.food) + Number(form.grocery)
+            ? form.food.reduce((sum, item) => sum + Number(item.amount), 0) +
+              form.grocery.reduce((sum, item) => sum + Number(item.amount), 0)
             : form.category === "official"
-            ? Number(form.food)
+            ? form.food.reduce((sum, item) => sum + Number(item.amount), 0)
             : 0,
         entertainment:
-          form.category === "personal" ? Number(form.entertainment) : 0,
+          form.category === "personal"
+            ? form.entertainment.reduce(
+                (sum, item) => sum + Number(item.amount),
+                0
+              )
+            : 0,
         total: total,
         createdAt: expenseData.createdAt,
         notes: expenseData.notes,
@@ -489,21 +570,6 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       if (mounted.current) {
         // Modal is shown, reset form and navigate after delay
         safeSetState(() => setForm(initialState));
-        safeSetState(() => setFoodFiles([]));
-        safeSetState(() => setFuelFiles([]));
-        safeSetState(() => setEntertainmentFiles([]));
-        safeSetState(() => setUtilityFiles([]));
-        safeSetState(() => setHomeFiles([]));
-        safeSetState(() => setTravelFiles([]));
-        safeSetState(() => setGroceryFiles([]));
-        safeSetState(() => setTransportFiles([]));
-        safeSetState(() => setHotelFiles([]));
-        safeSetState(() => setLabourFiles([]));
-        safeSetState(() => setToolsFiles([]));
-        safeSetState(() => setConsumablesFiles([]));
-        safeSetState(() => setStayFiles([]));
-        safeSetState(() => setTransportOfMaterialFiles([]));
-        safeSetState(() => setLocalCommuteFiles([]));
         if (typeof props.onExpenseAdded === "function") props.onExpenseAdded();
 
         // Delay navigation to prevent state updates after unmount
@@ -516,7 +582,9 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     } catch (err: any) {
       console.error("Expense submit error:", err);
       safeSetState(() => setShowLoadingModal(false));
-      safeSetState(() => setErrorMessage(err.message || "Error submitting expense"));
+      safeSetState(() =>
+        setErrorMessage(err.message || "Error submitting expense")
+      );
       safeSetState(() => setShowErrorModal(true));
       safeSetState(() => setLoading(false));
     }
@@ -536,15 +604,13 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     safeSetState(() => setCategoryModalOpen(false));
     safeSetState(() => setFileInputKey((prev) => prev + 1));
     safeSetState(() => setBillOcrLoading(false));
-    safeSetState(() => setShouldTriggerFileInput(true));
   };
 
   React.useEffect(() => {
-    if (shouldTriggerFileInput && fileInputRef.current) {
+    if (fileInputRef.current) {
       fileInputRef.current.click();
-      safeSetState(() => setShouldTriggerFileInput(false));
     }
-  }, [shouldTriggerFileInput]);
+  }, []);
 
   // Handle bill image(s) selection and OCR
   const handleBillImageChange = async (
@@ -736,66 +802,19 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto mt-6">
+    <div className="max-w-6xl mx-auto mt-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start">
         {/* Left: Expense Form */}
         <Card className="p-4 sm:p-6 w-full">
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Location Display */}
-            <div
-              className="mb-4 p-3 rounded-lg border"
-              style={{
-                background: "var(--accent-light)",
-                borderColor: "var(--muted)",
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3
-                  className="text-sm font-semibold"
-                  style={{ color: "var(--primary)" }}
-                >
-                  📍 Current Location
-                </h3>
-                <button
-                  type="button"
-                  onClick={captureLocation}
-                  disabled={locationLoading}
-                  className="text-xs px-2 py-1 rounded border"
-                  style={{
-                    background: locationLoading
-                      ? "var(--muted)"
-                      : "var(--primary)",
-                    color: "var(--surface)",
-                    borderColor: "var(--primary)",
-                  }}
-                >
-                  {locationLoading ? "🔄 Getting..." : "🔄 Refresh"}
-                </button>
+           <h1 className="text-2xl font-bold" style={{ color: "var(--primary)" }}>
+            Enter your expense
+           </h1>
+           {location && (
+              <div className="text-sm text-gray-600 mb-6">
+                📍 {location.address.split(",").slice(1, 3).join(", ")}
               </div>
-              {locationError ? (
-                <div className="text-xs text-red-500 mb-1">
-                  ⚠️ {locationError}
-                </div>
-              ) : null}
-              {location ? (
-                <div className="space-y-1">
-                  <div className="text-xs" style={{ color: "var(--foreground)" }}>
-                    <strong>Address:</strong> {location.address}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    <strong>Coordinates:</strong> {location.latitude.toFixed(6)},{" "}
-                    {location.longitude.toFixed(6)}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    <strong>Captured:</strong> {location.timestamp}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-gray-500">
-                  Location not captured yet...
-                </div>
-              )}
-            </div>
+           )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
@@ -829,293 +848,749 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             </div>
             {form.category === "personal" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="food"
-                    value={form.food}
-                    onChange={handleChange}
-                    label="Food"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={foodFiles}
-                    setFiles={setFoodFiles}
-                    fieldName="food"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="fuel"
-                    value={form.fuel}
-                    onChange={handleChange}
-                    label="Fuel"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={fuelFiles}
-                    setFiles={setFuelFiles}
-                    fieldName="fuel"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="entertainment"
-                    value={form.entertainment}
-                    onChange={handleChange}
-                    label="Entertainment"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={entertainmentFiles}
-                    setFiles={setEntertainmentFiles}
-                    fieldName="entertainment"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="utility"
-                    value={form.utility}
-                    onChange={handleChange}
-                    label="Utility"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={utilityFiles}
-                    setFiles={setUtilityFiles}
-                    fieldName="utility"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="home"
-                    value={form.home}
-                    onChange={handleChange}
-                    label="Home"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={homeFiles}
-                    setFiles={setHomeFiles}
-                    fieldName="home"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="travel"
-                    value={form.travel}
-                    onChange={handleChange}
-                    label="Travel"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={travelFiles}
-                    setFiles={setTravelFiles}
-                    fieldName="travel"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="grocery"
-                    value={form.grocery}
-                    onChange={handleChange}
-                    label="Grocery"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={groceryFiles}
-                    setFiles={setGroceryFiles}
-                    fieldName="grocery"
-                  />
-                </div>
+                {form.food.map((item, idx) => (
+                  <div key={idx}>
+                    <div className="text-sm mb-1 text-gray-600">
+                      Food {idx + 1}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      {/* Add wrapper div with max-width for amount input */}
+                      <div className="w-1/3">
+                        <Input
+                          name={`food-${idx}-amount`}
+                          value={item.amount}
+                          onChange={(e) =>
+                            handleItemChange(
+                              "food",
+                              idx,
+                              "amount",
+                              e.target.value
+                            )
+                          }
+                          label=""
+                          type="number"
+                          min="0"
+                          className="w-full"
+                        />
+                      </div>
+                      {/* Add wrapper div with fixed width for file upload */}
+                      <div className="w-1/3">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("food", idx, files)
+                          }
+                          fieldName={`food-${idx}`}
+                        />
+                      </div>
+                      {/* Add wrapper div for buttons */}
+                      <div className="flex gap-3 ml-4">
+                        <button
+                          type="button"
+                          onClick={() => removeItem("food", idx)}
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
+                          disabled={form.food.length <= 1}
+                        >
+                          -
+                        </button>
+                        {idx === form.food.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => addItem("food")}
+                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
+                          >
+                            +
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Fuel section */}
+                {form.fuel.map((item, idx) => (
+                  <div key={`fuel-${idx}`}>
+                    <div className="text-sm mb-1 text-gray-600">
+                      Fuel {idx + 1}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="w-1/3">
+                        <Input
+                          name={`fuel-${idx}-amount`}
+                          value={item.amount}
+                          onChange={(e) =>
+                            handleItemChange(
+                              "fuel",
+                              idx,
+                              "amount",
+                              e.target.value
+                            )
+                          }
+                          label=""
+                          type="number"
+                          min="0"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="w-1/3">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("fuel", idx, files)
+                          }
+                          fieldName={`fuel-${idx}`}
+                        />
+                      </div>
+                      <div className="flex gap-3 ml-4">
+                        <button
+                          type="button"
+                          onClick={() => removeItem("fuel", idx)}
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
+                          disabled={form.fuel.length <= 1}
+                        >
+                          -
+                        </button>
+                        {idx === form.fuel.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => addItem("fuel")}
+                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
+                          >
+                            +
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Entertainment section */}
+                {form.entertainment.map((item, idx) => (
+                  <div key={`entertainment-${idx}`}>
+                    <div className="text-sm mb-1 text-gray-600">
+                      Entertainment {idx + 1}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="w-1/3">
+                        <Input
+                          name={`entertainment-${idx}-amount`}
+                          value={item.amount}
+                          onChange={(e) =>
+                            handleItemChange(
+                              "entertainment",
+                              idx,
+                              "amount",
+                              e.target.value
+                            )
+                          }
+                          label=""
+                          type="number"
+                          min="0"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="w-1/3">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("entertainment", idx, files)
+                          }
+                          fieldName={`entertainment-${idx}`}
+                        />
+                      </div>
+                      <div className="flex gap-3 ml-4">
+                        <button
+                          type="button"
+                          onClick={() => removeItem("entertainment", idx)}
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
+                          disabled={form.entertainment.length <= 1}
+                        >
+                          -
+                        </button>
+                        {idx === form.entertainment.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => addItem("entertainment")}
+                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
+                          >
+                            +
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Utility section */}
+                {form.utility.map((item, idx) => (
+                  <div key={`utility-${idx}`}>
+                    <div className="text-sm mb-1 text-gray-600">
+                      Utility {idx + 1}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="w-1/3">
+                        <Input
+                          name={`utility-${idx}-amount`}
+                          value={item.amount}
+                          onChange={(e) =>
+                            handleItemChange(
+                              "utility",
+                              idx,
+                              "amount",
+                              e.target.value
+                            )
+                          }
+                          label=""
+                          type="number"
+                          min="0"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="w-1/3">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("utility", idx, files)
+                          }
+                          fieldName={`utility-${idx}`}
+                        />
+                      </div>
+                      <div className="flex gap-3 ml-4">
+                        <button
+                          type="button"
+                          onClick={() => removeItem("utility", idx)}
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
+                          disabled={form.utility.length <= 1}
+                        >
+                          -
+                        </button>
+                        {idx === form.utility.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => addItem("utility")}
+                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
+                          >
+                            +
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             {form.category === "official" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="food"
-                    value={form.food}
-                    onChange={handleChange}
-                    label="Food"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={foodFiles}
-                    setFiles={setFoodFiles}
-                    fieldName="food"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="fuel"
-                    value={form.fuel}
-                    onChange={handleChange}
-                    label="Fuel"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={fuelFiles}
-                    setFiles={setFuelFiles}
-                    fieldName="fuel"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="transport"
-                    value={form.transport}
-                    onChange={handleChange}
-                    label="Transport"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={transportFiles}
-                    setFiles={setTransportFiles}
-                    fieldName="transport"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="hotel"
-                    value={form.hotel}
-                    onChange={handleChange}
-                    label="Hotel"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={hotelFiles}
-                    setFiles={setHotelFiles}
-                    fieldName="hotel"
-                  />
-                </div>
+                {form.food.map((item, idx) => (
+                  <div key={idx}>
+                    <div className="text-sm mb-1 text-gray-600">
+                      Food {idx + 1}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Input
+                        name={`food-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "food",
+                            idx,
+                            "amount",
+                            e.target.value
+                          )
+                        }
+                        label=""
+                        type="number"
+                        min="0"
+                      />
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("food", idx, files)
+                        }
+                        fieldName={`food-${idx}`}
+                      />
+                      <div className="flex gap-3 ml-8">
+                        <button
+                          type="button"
+                          onClick={() => removeItem("food", idx)}
+                          className="px-2 py-1 bg-red-500 text-white rounded"
+                          disabled={form.food.length <= 1}
+                        >
+                          -
+                        </button>
+                        {idx === form.food.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => addItem("food")}
+                            className="px-2 py-1 bg-blue-500 text-white rounded"
+                          >
+                            +
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {form.fuel.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`fuel-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange("fuel", idx, "amount", e.target.value)
+                      }
+                      label={`Fuel ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("fuel", idx, files)
+                      }
+                      fieldName={`fuel-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-8">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("fuel", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.fuel.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.fuel.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("fuel")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.transport.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`transport-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "transport",
+                          idx,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      label={`Transport ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("transport", idx, files)
+                      }
+                      fieldName={`transport-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("transport", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.transport.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.transport.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("transport")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.hotel.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`hotel-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange("hotel", idx, "amount", e.target.value)
+                      }
+                      label={`Hotel ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("hotel", idx, files)
+                      }
+                      fieldName={`hotel-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("hotel", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.hotel.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.hotel.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("hotel")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             {form.category === "site" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-end gap-2">
-                  <Input
-                    name="siteName"
-                    value={form.siteName}
-                    onChange={handleChange}
-                    label="Site Name"
-                    type="text"
-                  />
+                  <label className="block" style={{ color: 'var(--foreground)' }}>
+                    <span className="block mb-1 text-sm font-semibold" style={{ color: 'var(--secondary)' }}>Site Name</span>
+                    <input
+                      name="siteName"
+                      value={form.siteName}
+                      onChange={handleChange}
+                      list="site-names"
+                      className="themed-input w-full px-4 py-3 border rounded focus:outline-none focus:ring-2 text-base"
+                      style={{
+                        background: 'var(--surface)',
+                        color: 'var(--foreground)',
+                        border: '1px solid black',
+                        fontFamily: 'var(--font-sans)',
+                        boxShadow: 'none',
+                        minHeight: '45px',
+                      }}
+                      placeholder="Enter or select site name"
+                    />
+                    <datalist id="site-names">
+                      {siteNames.map(site => (
+                        <option key={site} value={site} />
+                      ))}
+                    </datalist>
+                  </label>
                 </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="labour"
-                    value={form.labour}
-                    onChange={handleChange}
-                    label="Labour"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={labourFiles}
-                    setFiles={setLabourFiles}
-                    fieldName="labour"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="travel"
-                    value={form.travel}
-                    onChange={handleChange}
-                    label="Travel"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={travelFiles}
-                    setFiles={setTravelFiles}
-                    fieldName="travel"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="tools"
-                    value={form.tools}
-                    onChange={handleChange}
-                    label="Tools"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={toolsFiles}
-                    setFiles={setToolsFiles}
-                    fieldName="tools"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="consumables"
-                    value={form.consumables}
-                    onChange={handleChange}
-                    label="Consumables"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={consumablesFiles}
-                    setFiles={setConsumablesFiles}
-                    fieldName="consumables"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="stay"
-                    value={form.stay}
-                    onChange={handleChange}
-                    label="Stay"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={stayFiles}
-                    setFiles={setStayFiles}
-                    fieldName="stay"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="transportOfMaterial"
-                    value={form.transportOfMaterial}
-                    onChange={handleChange}
-                    label="Transport of Material"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={transportOfMaterialFiles}
-                    setFiles={setTransportOfMaterialFiles}
-                    fieldName="transportOfMaterial"
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Input
-                    name="localCommute"
-                    value={form.localCommute}
-                    onChange={handleChange}
-                    label="Local Commute"
-                    type="number"
-                    min="0"
-                  />
-                  <FileUploadArea
-                    files={localCommuteFiles}
-                    setFiles={setLocalCommuteFiles}
-                    fieldName="localCommute"
-                  />
-                </div>
+                {form.labour.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`labour-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "labour",
+                          idx,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      label={`Labour ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("labour", idx, files)
+                      }
+                      fieldName={`labour-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("labour", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.labour.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.labour.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("labour")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.travel.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`travel-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "travel",
+                          idx,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      label={`Travel ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("travel", idx, files)
+                      }
+                      fieldName={`travel-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("travel", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.travel.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.travel.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("travel")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.tools.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`tools-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange("tools", idx, "amount", e.target.value)
+                      }
+                      label={`Tools ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("tools", idx, files)
+                      }
+                      fieldName={`tools-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("tools", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.tools.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.tools.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("tools")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.consumables.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`consumables-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "consumables",
+                          idx,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      label={`Consumables ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("consumables", idx, files)
+                      }
+                      fieldName={`consumables-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("consumables", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.consumables.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.consumables.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("consumables")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.stay.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`stay-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange("stay", idx, "amount", e.target.value)
+                      }
+                      label={`Stay ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("stay", idx, files)
+                      }
+                      fieldName={`stay-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-8">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("stay", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.stay.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.stay.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("stay")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.transportOfMaterial.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`transportOfMaterial-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "transportOfMaterial",
+                          idx,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      label={`Transport of Material ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("transportOfMaterial", idx, files)
+                      }
+                      fieldName={`transportOfMaterial-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-8">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("transportOfMaterial", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.transportOfMaterial.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.transportOfMaterial.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("transportOfMaterial")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {form.localCommute.map((item, idx) => (
+                  <div key={idx} className="flex items-end gap-2">
+                    <Input
+                      name={`localCommute-${idx}-amount`}
+                      value={item.amount}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "localCommute",
+                          idx,
+                          "amount",
+                          e.target.value
+                        )
+                      }
+                      label={`Local Commute ${idx + 1}`}
+                      type="number"
+                      min="0"
+                    />
+                    <FileUploadArea
+                      files={item.files}
+                      setFiles={(files) =>
+                        handleItemFilesChange("localCommute", idx, files)
+                      }
+                      fieldName={`localCommute-${idx}`}
+                    />
+                    <div className="flex gap-3 ml-8">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("localCommute", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        disabled={form.localCommute.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.localCommute.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("localCommute")}
+                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             {form.category !== "personal" &&
@@ -1126,50 +1601,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                     <div
                       key={idx}
                       className="flex flex-col sm:flex-row gap-2 items-end"
-                    >
-                      <Input
-                        type="text"
-                        value={other.label}
-                        onChange={(e) =>
-                          handleOtherChange(idx, "label", e.target.value)
-                        }
-                        label={idx === 0 ? "Others (label)" : ""}
-                        placeholder="Other expense label"
-                      />
-                      <Input
-                        type="number"
-                        value={other.amount}
-                        onChange={(e) =>
-                          handleOtherChange(idx, "amount", e.target.value)
-                        }
-                        label={idx === 0 ? "Amount" : ""}
-                        placeholder="Amount"
-                        min="0"
-                      />
-                      <Button
-                        type="button"
-                        className="px-2 py-1"
-                        style={{
-                          background: "var(--muted)",
-                          color: "var(--surface)",
-                        }}
-                        onClick={() => removeOtherField(idx)}
-                      >
-                        -
-                      </Button>
-                    </div>
+                    ></div>
                   ))}
-                  <Button
-                    type="button"
-                    className="w-full sm:w-auto"
-                    style={{
-                      background: "var(--primary)",
-                      color: "var(--surface)",
-                    }}
-                    onClick={addOtherField}
-                  >
-                    + Add Other expense
-                  </Button>
                 </div>
               )}
             <Input
@@ -1182,7 +1615,11 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             <div className="font-bold" style={{ color: "var(--primary)" }}>
               Total: ₹{total}
             </div>
-            <Button type="submit" disabled={loading} className="w-full sm:w-auto">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
               {loading ? "Submitting..." : "Submit Expense"}
             </Button>
           </form>
@@ -1191,23 +1628,47 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       {/* Success Modal */}
       {showSuccessModal && (
-        <Dialog open={showSuccessModal} onClose={closeSuccessModal} className="fixed z-50 inset-0 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" onClick={closeSuccessModal} />
-          <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-md w-full mx-4 z-10">
-            <Dialog.Title className="text-xl font-semibold text-center mb-4" style={{ color: 'var(--primary)' }}>
-              ✅ Expense Submitted
-            </Dialog.Title>
-            <Dialog.Description className="text-center text-sm mb-4" style={{ color: 'var(--foreground)' }}>
-              Expense successfully submitted for review
-            </Dialog.Description>
-            <div className="flex justify-center">
-              <Button
-                onClick={closeSuccessModal}
-                className="w-full sm:w-auto"
-                style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+        <Dialog
+          open={showSuccessModal}
+          onClose={closeSuccessModal}
+          className="fixed z-50 inset-0 flex items-center justify-center"
+        >
+          <div
+            className="fixed inset-0 bg-black bg-opacity-30"
+            aria-hidden="true"
+            onClick={closeSuccessModal}
+          />
+          <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-md w-full mx-4 z-10 transform transition-all">
+            <div className="flex flex-col items-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <svg className="h-10 w-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+              </div>
+              <Dialog.Title
+                className="text-2xl font-semibold text-center mb-2"
+                style={{ color: "var(--primary)" }}
               >
-                OK
-              </Button>
+                Success!
+              </Dialog.Title>
+              <Dialog.Description
+                className="text-center text-base mb-6"
+                style={{ color: "var(--foreground)" }}
+              >
+                Your expense has been successfully submitted for review
+              </Dialog.Description>
+              <div className="flex justify-center w-full">
+                <Button
+                  onClick={closeSuccessModal}
+                  className="px-6 py-2 rounded-lg transition-colors duration-200 ease-in-out transform hover:scale-105"
+                  style={{
+                    background: "var(--primary)",
+                    color: "var(--surface)",
+                  }}
+                >
+                  Done
+                </Button>
+              </div>
             </div>
           </Card>
         </Dialog>
@@ -1215,17 +1676,33 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       {/* Loading Modal */}
       {showLoadingModal && (
-        <Dialog open={showLoadingModal} onClose={() => {}} className="fixed z-50 inset-0 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+        <Dialog
+          open={showLoadingModal}
+          onClose={() => {}}
+          className="fixed z-50 inset-0 flex items-center justify-center"
+        >
+          <div
+            className="fixed inset-0 bg-black bg-opacity-30"
+            aria-hidden="true"
+          />
           <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-md w-full mx-4 z-10">
-            <Dialog.Title className="text-xl font-semibold text-center mb-4" style={{ color: 'var(--primary)' }}>
+            <Dialog.Title
+              className="text-xl font-semibold text-center mb-4"
+              style={{ color: "var(--primary)" }}
+            >
               ⏳ Submitting Expense
             </Dialog.Title>
-            <Dialog.Description className="text-center text-sm mb-4" style={{ color: 'var(--foreground)' }}>
+            <Dialog.Description
+              className="text-center text-sm mb-4"
+              style={{ color: "var(--foreground)" }}
+            >
               Please wait while we submit your expense...
             </Dialog.Description>
             <div className="flex justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--primary)' }}></div>
+              <div
+                className="animate-spin rounded-full h-8 w-8 border-b-2"
+                style={{ borderColor: "var(--primary)" }}
+              ></div>
             </div>
           </Card>
         </Dialog>
@@ -1233,20 +1710,34 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       {/* Error Modal */}
       {showErrorModal && (
-        <Dialog open={showErrorModal} onClose={closeErrorModal} className="fixed z-50 inset-0 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" onClick={closeErrorModal} />
+        <Dialog
+          open={showErrorModal}
+          onClose={closeErrorModal}
+          className="fixed z-50 inset-0 flex items-center justify-center"
+        >
+          <div
+            className="fixed inset-0 bg-black bg-opacity-30"
+            aria-hidden="true"
+            onClick={closeErrorModal}
+          />
           <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-md w-full mx-4 z-10">
-            <Dialog.Title className="text-xl font-semibold text-center mb-4" style={{ color: 'var(--accent)' }}>
+            <Dialog.Title
+              className="text-xl font-semibold text-center mb-4"
+              style={{ color: "var(--accent)" }}
+            >
               ❌ Submission Failed
             </Dialog.Title>
-            <Dialog.Description className="text-center text-sm mb-4" style={{ color: 'var(--foreground)' }}>
+            <Dialog.Description
+              className="text-center text-sm mb-4"
+              style={{ color: "var(--foreground)" }}
+            >
               {errorMessage}
             </Dialog.Description>
             <div className="flex justify-center">
               <Button
                 onClick={closeErrorModal}
                 className="w-full sm:w-auto"
-                style={{ background: 'var(--accent)', color: 'var(--surface)' }}
+                style={{ background: "var(--accent)", color: "var(--surface)" }}
               >
                 Try Again
               </Button>
