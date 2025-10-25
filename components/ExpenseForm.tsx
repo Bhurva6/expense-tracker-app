@@ -65,52 +65,53 @@ const FileUploadArea = ({
   </div>
 );
 
+type ExpenseItem = { amount: string; description: string; files: File[] };
 type ExpenseFormState = {
   date: string;
   category: string;
-  food: { amount: string; files: File[] }[];
-  fuel: { amount: string; files: File[] }[];
-  entertainment: { amount: string; files: File[] }[];
-  utility: { amount: string; files: File[] }[];
-  home: { amount: string; files: File[] }[];
-  travel: { amount: string; files: File[] }[];
-  grocery: { amount: string; files: File[] }[];
-  transport: { amount: string; files: File[] }[];
-  hotel: { amount: string; files: File[] }[];
+  food: ExpenseItem[];
+  fuel: ExpenseItem[];
+  entertainment: ExpenseItem[];
+  utility: ExpenseItem[];
+  home: ExpenseItem[];
+  travel: ExpenseItem[];
+  grocery: ExpenseItem[];
+  transport: ExpenseItem[];
+  hotel: ExpenseItem[];
   siteName: string;
-  labour: { amount: string; files: File[] }[];
-  tools: { amount: string; files: File[] }[];
-  consumables: { amount: string; files: File[] }[];
-  stay: { amount: string; files: File[] }[];
-  transportOfMaterial: { amount: string; files: File[] }[];
-  localCommute: { amount: string; files: File[] }[];
+  labour: ExpenseItem[];
+  tools: ExpenseItem[];
+  consumables: ExpenseItem[];
+  stay: ExpenseItem[];
+  transportOfMaterial: ExpenseItem[];
+  localCommute: ExpenseItem[];
   notes: string;
   file: File | null;
-  others: { label: string; amount: string; files: File[] }[];
+  others: { label: string; amount: string; description: string; files: File[] }[];
 };
 
 const initialState: ExpenseFormState = {
   date: "",
   category: "",
-  food: [{ amount: "", files: [] }],
-  fuel: [{ amount: "", files: [] }],
-  entertainment: [{ amount: "", files: [] }],
-  utility: [{ amount: "", files: [] }],
-  home: [{ amount: "", files: [] }],
-  travel: [{ amount: "", files: [] }],
-  grocery: [{ amount: "", files: [] }],
-  transport: [{ amount: "", files: [] }],
-  hotel: [{ amount: "", files: [] }],
+  food: [{ amount: "", description: "", files: [] }],
+  fuel: [{ amount: "", description: "", files: [] }],
+  entertainment: [{ amount: "", description: "", files: [] }],
+  utility: [{ amount: "", description: "", files: [] }],
+  home: [{ amount: "", description: "", files: [] }],
+  travel: [{ amount: "", description: "", files: [] }],
+  grocery: [{ amount: "", description: "", files: [] }],
+  transport: [{ amount: "", description: "", files: [] }],
+  hotel: [{ amount: "", description: "", files: [] }],
   siteName: "",
-  labour: [{ amount: "", files: [] }],
-  tools: [{ amount: "", files: [] }],
-  consumables: [{ amount: "", files: [] }],
-  stay: [{ amount: "", files: [] }],
-  transportOfMaterial: [{ amount: "", files: [] }],
-  localCommute: [{ amount: "", files: [] }],
+  labour: [{ amount: "", description: "", files: [] }],
+  tools: [{ amount: "", description: "", files: [] }],
+  consumables: [{ amount: "", description: "", files: [] }],
+  stay: [{ amount: "", description: "", files: [] }],
+  transportOfMaterial: [{ amount: "", description: "", files: [] }],
+  localCommute: [{ amount: "", description: "", files: [] }],
   notes: "",
   file: null as File | null,
-  others: [{ label: "", amount: "", files: [] }],
+  others: [{ label: "", amount: "", description: "", files: [] }],
 };
 
 export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
@@ -248,7 +249,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       ...prev,
       [field]: [
         ...(prev[field] as { amount: string; files: File[] }[]),
-        { amount: "", files: [] },
+        { amount: "", description: "", files: [] },
       ],
     }));
   };
@@ -266,11 +267,11 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const handleItemChange = (
     field: keyof typeof initialState,
     idx: number,
-    subfield: "amount",
+    subfield: "amount" | "description",
     value: string
   ) => {
     setForm((prev) => {
-      const updated = [...(prev[field] as { amount: string; files: File[] }[])];
+      const updated = [...(prev[field] as ExpenseItem[])];
       updated[idx] = { ...updated[idx], [subfield]: value };
       return { ...prev, [field]: updated };
     });
@@ -854,27 +855,35 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       Food {idx + 1}
                     </div>
                     <div className="flex items-end gap-2">
+                      <div className="w-1/2">
+                        <Input
+                          name={`food-${idx}-description`}
+                          value={item.description}
+                          onChange={(e) =>
+                            handleItemChange("food", idx, "description", e.target.value)
+                          }
+                          label="Description"
+                          type="text"
+                          className="w-full"
+                        />
+                      </div>
                       {/* Add wrapper div with max-width for amount input */}
-                      <div className="w-1/3">
+                      <div className="w-1/4">
                         <Input
                           name={`food-${idx}-amount`}
                           value={item.amount}
                           onChange={(e) =>
-                            handleItemChange(
-                              "food",
-                              idx,
-                              "amount",
-                              e.target.value
-                            )
+                            handleItemChange("food", idx, "amount", e.target.value)
                           }
-                          label=""
+                          label="Amount"
                           type="number"
                           min="0"
                           className="w-full"
                         />
                       </div>
+                      
                       {/* Add wrapper div with fixed width for file upload */}
-                      <div className="w-1/3">
+                      <div className="w-1/4">
                         <FileUploadArea
                           files={item.files}
                           setFiles={(files) =>
@@ -914,25 +923,33 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       Fuel {idx + 1}
                     </div>
                     <div className="flex items-end gap-2">
-                      <div className="w-1/3">
+                      <div className="w-1/2">
+                        <Input
+                          name={`fuel-${idx}-description`}
+                          value={item.description}
+                          onChange={(e) =>
+                            handleItemChange("fuel", idx, "description", e.target.value)
+                          }
+                          label="Description"
+                          type="text"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="w-1/4">
                         <Input
                           name={`fuel-${idx}-amount`}
                           value={item.amount}
                           onChange={(e) =>
-                            handleItemChange(
-                              "fuel",
-                              idx,
-                              "amount",
-                              e.target.value
-                            )
+                            handleItemChange("fuel", idx, "amount", e.target.value)
                           }
-                          label=""
+                          label="Amount"
                           type="number"
                           min="0"
                           className="w-full"
                         />
                       </div>
-                      <div className="w-1/3">
+                      
+                      <div className="w-1/4">
                         <FileUploadArea
                           files={item.files}
                           setFiles={(files) =>
@@ -971,7 +988,24 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       Entertainment {idx + 1}
                     </div>
                     <div className="flex items-end gap-2">
-                      <div className="w-1/3">
+                       <div className="w-1/2">
+                        <Input
+                          name={`entertainment-${idx}-description`}
+                          value={item.description}
+                          onChange={(e) =>
+                            handleItemChange(
+                              "entertainment",
+                              idx,
+                              "description",
+                              e.target.value
+                            )
+                          }
+                          label="Description"
+                          type="text"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="w-1/4">
                         <Input
                           name={`entertainment-${idx}-amount`}
                           value={item.amount}
@@ -983,13 +1017,14 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                               e.target.value
                             )
                           }
-                          label=""
+                          label="Amount"
                           type="number"
                           min="0"
                           className="w-full"
                         />
                       </div>
-                      <div className="w-1/3">
+                     
+                      <div className="w-1/4">
                         <FileUploadArea
                           files={item.files}
                           setFiles={(files) =>
@@ -1028,25 +1063,33 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       Utility {idx + 1}
                     </div>
                     <div className="flex items-end gap-2">
-                      <div className="w-1/3">
+                      <div className="w-1/2">
+                        <Input
+                          name={`utility-${idx}-description`}
+                          value={item.description}
+                          onChange={(e) =>
+                            handleItemChange("utility", idx, "description", e.target.value)
+                          }
+                          label="Description"
+                          type="text"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="w-1/4">
                         <Input
                           name={`utility-${idx}-amount`}
                           value={item.amount}
                           onChange={(e) =>
-                            handleItemChange(
-                              "utility",
-                              idx,
-                              "amount",
-                              e.target.value
-                            )
+                            handleItemChange("utility", idx, "amount", e.target.value)
                           }
-                          label=""
+                          label="Amount"
                           type="number"
                           min="0"
                           className="w-full"
                         />
                       </div>
-                      <div className="w-1/3">
+                      
+                      <div className="w-1/4">
                         <FileUploadArea
                           files={item.files}
                           setFiles={(files) =>
@@ -1091,16 +1134,21 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         name={`food-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
-                          handleItemChange(
-                            "food",
-                            idx,
-                            "amount",
-                            e.target.value
-                          )
+                          handleItemChange("food", idx, "amount", e.target.value)
                         }
-                        label=""
+                        label="Amount"
                         type="number"
                         min="0"
+                      />
+                      <Input
+                        name={`food-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("food", idx, "description", e.target.value)
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
                       />
                       <FileUploadArea
                         files={item.files}
@@ -1133,6 +1181,16 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.fuel.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
+                     <Input
+                      name={`fuel-${idx}-description`}
+                      value={item.description}
+                      onChange={(e) =>
+                        handleItemChange("fuel", idx, "description", e.target.value)
+                      }
+                      label={`Description`}
+                      type="text"
+                      className="w-full"
+                    />
                     <Input
                       name={`fuel-${idx}-amount`}
                       value={item.amount}
@@ -1143,6 +1201,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       type="number"
                       min="0"
                     />
+                   
                     <FileUploadArea
                       files={item.files}
                       setFiles={(files) =>
@@ -1174,6 +1233,21 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 {form.transport.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
                     <Input
+                      name={`transport-${idx}-description`}
+                      value={item.description}
+                      onChange={(e) =>
+                        handleItemChange(
+                          "transport",
+                          idx,
+                          "description",
+                          e.target.value
+                        )
+                      }
+                      label={`Description`}
+                      type="text"
+                      className="w-full"
+                    />
+                    <Input
                       name={`transport-${idx}-amount`}
                       value={item.amount}
                       onChange={(e) =>
@@ -1188,6 +1262,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       type="number"
                       min="0"
                     />
+                    
                     <FileUploadArea
                       files={item.files}
                       setFiles={(files) =>
@@ -1219,6 +1294,16 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 {form.hotel.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
                     <Input
+                      name={`hotel-${idx}-description`}
+                      value={item.description}
+                      onChange={(e) =>
+                        handleItemChange("hotel", idx, "description", e.target.value)
+                      }
+                      label={`Description`}
+                      type="text"
+                      className="w-full"
+                    />
+                    <Input
                       name={`hotel-${idx}-amount`}
                       value={item.amount}
                       onChange={(e) =>
@@ -1228,6 +1313,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                       type="number"
                       min="0"
                     />
+                    
                     <FileUploadArea
                       files={item.files}
                       setFiles={(files) =>
@@ -1260,7 +1346,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             )}
             {form.category === "site" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-end gap-2">
+                <div className="flex flex-col gap-4">
                   <label className="block" style={{ color: 'var(--foreground)' }}>
                     <span className="block mb-1 text-sm font-semibold" style={{ color: 'var(--secondary)' }}>Site Name</span>
                     <input
@@ -1288,28 +1374,49 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 </div>
                 {form.labour.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`labour-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "labour",
-                          idx,
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      label={`Labour ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("labour", idx, files)
-                      }
-                      fieldName={`labour-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`labour-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "labour",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`labour-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "labour",
+                            idx,
+                            "amount",
+                            e.target.value
+                          )
+                        }
+                        label={`Labour ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("labour", idx, files)
+                        }
+                        fieldName={`labour-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-4">
                       <button
                         type="button"
@@ -1333,28 +1440,49 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.travel.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`travel-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "travel",
-                          idx,
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      label={`Travel ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("travel", idx, files)
-                      }
-                      fieldName={`travel-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`travel-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "travel",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`travel-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "travel",
+                            idx,
+                            "amount",
+                            e.target.value
+                          )
+                        }
+                        label={`Travel ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("travel", idx, files)
+                        }
+                        fieldName={`travel-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-4">
                       <button
                         type="button"
@@ -1378,23 +1506,44 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.tools.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`tools-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange("tools", idx, "amount", e.target.value)
-                      }
-                      label={`Tools ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("tools", idx, files)
-                      }
-                      fieldName={`tools-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`tools-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "tools",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`tools-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("tools", idx, "amount", e.target.value)
+                        }
+                        label={`Tools ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("tools", idx, files)
+                        }
+                        fieldName={`tools-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-4">
                       <button
                         type="button"
@@ -1418,28 +1567,49 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.consumables.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`consumables-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "consumables",
-                          idx,
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      label={`Consumables ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("consumables", idx, files)
-                      }
-                      fieldName={`consumables-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`consumables-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "consumables",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`consumables-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "consumables",
+                            idx,
+                            "amount",
+                            e.target.value
+                          )
+                        }
+                        label={`Consumables ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("consumables", idx, files)
+                        }
+                        fieldName={`consumables-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-4">
                       <button
                         type="button"
@@ -1463,23 +1633,44 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.stay.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`stay-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange("stay", idx, "amount", e.target.value)
-                      }
-                      label={`Stay ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("stay", idx, files)
-                      }
-                      fieldName={`stay-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`stay-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "stay",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`stay-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("stay", idx, "amount", e.target.value)
+                        }
+                        label={`Stay ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("stay", idx, files)
+                        }
+                        fieldName={`stay-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-8">
                       <button
                         type="button"
@@ -1503,28 +1694,49 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.transportOfMaterial.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`transportOfMaterial-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "transportOfMaterial",
-                          idx,
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      label={`Transport of Material ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("transportOfMaterial", idx, files)
-                      }
-                      fieldName={`transportOfMaterial-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`transportOfMaterial-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "transportOfMaterial",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`transportOfMaterial-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "transportOfMaterial",
+                            idx,
+                            "amount",
+                            e.target.value
+                          )
+                        }
+                        label={`Transport of Material ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("transportOfMaterial", idx, files)
+                        }
+                        fieldName={`transportOfMaterial-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-8">
                       <button
                         type="button"
@@ -1548,28 +1760,49 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
                 {form.localCommute.map((item, idx) => (
                   <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`localCommute-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "localCommute",
-                          idx,
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      label={`Local Commute ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("localCommute", idx, files)
-                      }
-                      fieldName={`localCommute-${idx}`}
-                    />
+                    <div className="w-1/2">
+                      <Input
+                        name={`localCommute-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "localCommute",
+                            idx,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        label="Description"
+                        type="text"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <Input
+                        name={`localCommute-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange(
+                            "localCommute",
+                            idx,
+                            "amount",
+                            e.target.value
+                          )
+                        }
+                        label={`Local Commute ${idx + 1}`}
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-1/4">
+                      <FileUploadArea
+                        files={item.files}
+                        setFiles={(files) =>
+                          handleItemFilesChange("localCommute", idx, files)
+                        }
+                        fieldName={`localCommute-${idx}`}
+                      />
+                    </div>
                     <div className="flex gap-3 ml-8">
                       <button
                         type="button"
