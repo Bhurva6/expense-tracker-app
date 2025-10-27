@@ -8,12 +8,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import Tesseract from "tesseract.js";
 import { Dialog } from "@headlessui/react";
-import {
-  PaperClipIcon,
-  DocumentTextIcon,
-  PhotoIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+import { PaperClipIcon, XMarkIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { db } from "../lib/firebase";
 import { sendNewExpenseNotification } from "../lib/emailService";
@@ -28,35 +23,69 @@ const FileUploadArea = ({
   fieldName: string;
 }) => (
   <div className="flex items-center gap-2">
-    <div
-      className="flex items-center justify-center border border-dashed rounded p-2 cursor-pointer transition hover:bg-gray-50 min-w-[80px] min-h-[40px]"
-      style={{ borderColor: "var(--muted)", background: "var(--accent-light)" }}
-      onClick={() => document.getElementById(`${fieldName}-input`)?.click()}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const droppedFiles = Array.from(e.dataTransfer.files);
-        setFiles([...files, ...droppedFiles]);
-      }}
-    >
-      <PaperClipIcon className="w-4 h-4" style={{ color: "var(--primary)" }} />
-      <input
-        id={`${fieldName}-input`}
-        type="file"
-        multiple
-        accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.rtf,.odt,.ods,.odp"
-        onChange={(e) => {
-          if (e.target.files) {
-            setFiles([...files, ...Array.from(e.target.files)]);
-          }
+    {files.length === 0 ? (
+      <div
+        className="flex items-center justify-center border border-dashed rounded p-2 cursor-pointer transition hover:bg-gray-50 min-w-20 min-h-10"
+        style={{ borderColor: "var(--muted)", background: "var(--accent-light)" }}
+        onClick={() => document.getElementById(`${fieldName}-input`)?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
         }}
-        className="hidden"
-      />
-    </div>
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const droppedFiles = Array.from(e.dataTransfer.files);
+          setFiles([...files, ...droppedFiles]);
+        }}
+      >
+        <PaperClipIcon className="w-4 h-4" style={{ color: "var(--primary)" }} />
+        <input
+          id={`${fieldName}-input`}
+          type="file"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.rtf,.odt,.ods,.odp"
+          onChange={(e) => {
+            if (e.target.files?.length) {
+              setFiles([Array.from(e.target.files)[0]]);
+            }
+          }}
+          className="hidden"
+        />
+      </div>
+    ) : (
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
+          <PaperClipIcon className="w-4 h-4 text-gray-600" />
+          <span className="text-sm text-gray-600 max-w-[100px] truncate">
+            {files[0].name}
+          </span>
+          <button
+            type="button"
+            onClick={() => setFiles([])}
+            className="ml-1 text-red-500 hover:text-red-600"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+        </div>
+        <div
+          className="flex items-center justify-center border border-dashed rounded p-2 cursor-pointer transition hover:bg-gray-50"
+          onClick={() => document.getElementById(`${fieldName}-input`)?.click()}
+        >
+          <ArrowPathIcon className="w-4 h-4" style={{ color: "var(--primary)" }} />
+          <input
+            id={`${fieldName}-input`}
+            type="file"
+            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.rtf,.odt,.ods,.odp"
+            onChange={(e) => {
+              if (e.target.files?.length) {
+                setFiles([Array.from(e.target.files)[0]]);
+              }
+            }}
+            className="hidden"
+          />
+        </div>
+      </div>
+    )}
     {files.length > 0 && (
       <span className="text-xs text-gray-500">
         {files.length} file{files.length > 1 ? "s" : ""}
@@ -85,6 +114,7 @@ type ExpenseFormState = {
   stay: ExpenseItem[];
   transportOfMaterial: ExpenseItem[];
   localCommute: ExpenseItem[];
+  miscellaneous: ExpenseItem[];
   notes: string;
   file: File | null;
   others: { label: string; amount: string; description: string; files: File[] }[];
@@ -106,6 +136,7 @@ const initialState: ExpenseFormState = {
   labour: [{ amount: "", description: "", files: [] }],
   tools: [{ amount: "", description: "", files: [] }],
   consumables: [{ amount: "", description: "", files: [] }],
+  miscellaneous: [{ amount: "", description: "", files: [] }],
   stay: [{ amount: "", description: "", files: [] }],
   transportOfMaterial: [{ amount: "", description: "", files: [] }],
   localCommute: [{ amount: "", description: "", files: [] }],
@@ -162,6 +193,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     File[]
   >([]);
   const [localCommuteFiles, setLocalCommuteFiles] = useState<File[]>([]);
+  const [miscellaneousFiles, setMiscellaneousFiles] = useState<File[]>([]);
   const [showLoadingModal, setShowLoadingModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -197,11 +229,12 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           ...form.home,
           ...form.travel,
           ...form.grocery,
+          ...form.miscellaneous,
         ]
           .map((item) => Number(item.amount))
           .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
       : form.category === "official"
-      ? [...form.food, ...form.fuel, ...form.transport, ...form.hotel]
+      ? [...form.food, ...form.fuel, ...form.transport, ...form.hotel, ...form.miscellaneous]
           .map((item) => Number(item.amount))
           .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
       : form.category === "site"
@@ -213,6 +246,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           ...form.stay,
           ...form.transportOfMaterial,
           ...form.localCommute,
+          ...form.miscellaneous,
         ]
           .map((item) => Number(item.amount))
           .reduce((a, b) => a + (isNaN(b) ? 0 : b), 0)
@@ -458,6 +492,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         ...form.tools.flatMap((item) => item.files),
         ...form.consumables.flatMap((item) => item.files),
         ...form.stay.flatMap((item) => item.files),
+        ...form.miscellaneous.flatMap((item) => item.files),
         ...form.transportOfMaterial.flatMap((item) => item.files),
         ...form.localCommute.flatMap((item) => item.files),
         ...form.others.flatMap((item) => item.files),
@@ -803,7 +838,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto mt-6">
+    <div className="max-w-screen-2xl mx-auto mt-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start">
         {/* Left: Expense Form */}
         <Card className="p-4 sm:p-6 w-full">
@@ -821,8 +856,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               <Input
                 type="date"
                 name="date"
-                value={form.date}
-                onChange={handleChange}
+                value={new Date().toISOString().split('T')[0]}
+                readOnly
                 required
                 label="Date"
               />
@@ -832,7 +867,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, category: e.target.value }))
                 }
-                className="themed-input w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
+                className="themed-input w-full px-8 py-2 border rounded focus:outline-none focus:ring-2"
                 style={{
                   background: "var(--surface)",
                   color: "var(--foreground)",
@@ -848,42 +883,35 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               </select>
             </div>
             {form.category === "personal" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 {form.food.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="text-sm mb-1 text-gray-600">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
                       Food {idx + 1}
                     </div>
-                    <div className="flex items-end gap-2">
-                      <div className="w-1/2">
-                        <Input
-                          name={`food-${idx}-description`}
-                          value={item.description}
-                          onChange={(e) =>
-                            handleItemChange("food", idx, "description", e.target.value)
-                          }
-                          label="Description"
-                          type="text"
-                          className="w-full"
-                        />
-                      </div>
-                      {/* Add wrapper div with max-width for amount input */}
-                      <div className="w-1/4">
-                        <Input
-                          name={`food-${idx}-amount`}
-                          value={item.amount}
-                          onChange={(e) =>
-                            handleItemChange("food", idx, "amount", e.target.value)
-                          }
-                          label="Amount"
-                          type="number"
-                          min="0"
-                          className="w-full"
-                        />
-                      </div>
-                      
-                      {/* Add wrapper div with fixed width for file upload */}
-                      <div className="w-1/4">
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`food-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("food", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`food-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("food", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
                         <FileUploadArea
                           files={item.files}
                           setFiles={(files) =>
@@ -892,64 +920,56 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                           fieldName={`food-${idx}`}
                         />
                       </div>
-                      {/* Add wrapper div for buttons */}
-                      <div className="flex gap-3 ml-4">
+                      <button
+                        type="button"
+                        onClick={() => removeItem("food", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.food.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.food.length - 1 && (
                         <button
                           type="button"
-                          onClick={() => removeItem("food", idx)}
-                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
-                          disabled={form.food.length <= 1}
+                          onClick={() => addItem("food")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
-                          -
+                          +
                         </button>
-                        {idx === form.food.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => addItem("food")}
-                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
-                          >
-                            +
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 ))}
 
                 {/* Fuel section */}
                 {form.fuel.map((item, idx) => (
-                  <div key={`fuel-${idx}`}>
-                    <div className="text-sm mb-1 text-gray-600">
+                  <div key={`fuel-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
                       Fuel {idx + 1}
                     </div>
-                    <div className="flex items-end gap-2">
-                      <div className="w-1/2">
-                        <Input
-                          name={`fuel-${idx}-description`}
-                          value={item.description}
-                          onChange={(e) =>
-                            handleItemChange("fuel", idx, "description", e.target.value)
-                          }
-                          label="Description"
-                          type="text"
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="w-1/4">
-                        <Input
-                          name={`fuel-${idx}-amount`}
-                          value={item.amount}
-                          onChange={(e) =>
-                            handleItemChange("fuel", idx, "amount", e.target.value)
-                          }
-                          label="Amount"
-                          type="number"
-                          min="0"
-                          className="w-full"
-                        />
-                      </div>
-                      
-                      <div className="w-1/4">
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`fuel-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("fuel", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`fuel-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("fuel", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
                         <FileUploadArea
                           files={item.files}
                           setFiles={(files) =>
@@ -958,262 +978,10 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                           fieldName={`fuel-${idx}`}
                         />
                       </div>
-                      <div className="flex gap-3 ml-4">
-                        <button
-                          type="button"
-                          onClick={() => removeItem("fuel", idx)}
-                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
-                          disabled={form.fuel.length <= 1}
-                        >
-                          -
-                        </button>
-                        {idx === form.fuel.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => addItem("fuel")}
-                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
-                          >
-                            +
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Entertainment section */}
-                {form.entertainment.map((item, idx) => (
-                  <div key={`entertainment-${idx}`}>
-                    <div className="text-sm mb-1 text-gray-600">
-                      Entertainment {idx + 1}
-                    </div>
-                    <div className="flex items-end gap-2">
-                       <div className="w-1/2">
-                        <Input
-                          name={`entertainment-${idx}-description`}
-                          value={item.description}
-                          onChange={(e) =>
-                            handleItemChange(
-                              "entertainment",
-                              idx,
-                              "description",
-                              e.target.value
-                            )
-                          }
-                          label="Description"
-                          type="text"
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="w-1/4">
-                        <Input
-                          name={`entertainment-${idx}-amount`}
-                          value={item.amount}
-                          onChange={(e) =>
-                            handleItemChange(
-                              "entertainment",
-                              idx,
-                              "amount",
-                              e.target.value
-                            )
-                          }
-                          label="Amount"
-                          type="number"
-                          min="0"
-                          className="w-full"
-                        />
-                      </div>
-                     
-                      <div className="w-1/4">
-                        <FileUploadArea
-                          files={item.files}
-                          setFiles={(files) =>
-                            handleItemFilesChange("entertainment", idx, files)
-                          }
-                          fieldName={`entertainment-${idx}`}
-                        />
-                      </div>
-                      <div className="flex gap-3 ml-4">
-                        <button
-                          type="button"
-                          onClick={() => removeItem("entertainment", idx)}
-                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
-                          disabled={form.entertainment.length <= 1}
-                        >
-                          -
-                        </button>
-                        {idx === form.entertainment.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => addItem("entertainment")}
-                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
-                          >
-                            +
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Utility section */}
-                {form.utility.map((item, idx) => (
-                  <div key={`utility-${idx}`}>
-                    <div className="text-sm mb-1 text-gray-600">
-                      Utility {idx + 1}
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <div className="w-1/2">
-                        <Input
-                          name={`utility-${idx}-description`}
-                          value={item.description}
-                          onChange={(e) =>
-                            handleItemChange("utility", idx, "description", e.target.value)
-                          }
-                          label="Description"
-                          type="text"
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="w-1/4">
-                        <Input
-                          name={`utility-${idx}-amount`}
-                          value={item.amount}
-                          onChange={(e) =>
-                            handleItemChange("utility", idx, "amount", e.target.value)
-                          }
-                          label="Amount"
-                          type="number"
-                          min="0"
-                          className="w-full"
-                        />
-                      </div>
-                      
-                      <div className="w-1/4">
-                        <FileUploadArea
-                          files={item.files}
-                          setFiles={(files) =>
-                            handleItemFilesChange("utility", idx, files)
-                          }
-                          fieldName={`utility-${idx}`}
-                        />
-                      </div>
-                      <div className="flex gap-3 ml-4">
-                        <button
-                          type="button"
-                          onClick={() => removeItem("utility", idx)}
-                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-[32px]"
-                          disabled={form.utility.length <= 1}
-                        >
-                          -
-                        </button>
-                        {idx === form.utility.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => addItem("utility")}
-                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 min-w-[32px]"
-                          >
-                            +
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {form.category === "official" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {form.food.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="text-sm mb-1 text-gray-600">
-                      Food {idx + 1}
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <Input
-                        name={`food-${idx}-amount`}
-                        value={item.amount}
-                        onChange={(e) =>
-                          handleItemChange("food", idx, "amount", e.target.value)
-                        }
-                        label="Amount"
-                        type="number"
-                        min="0"
-                      />
-                      <Input
-                        name={`food-${idx}-description`}
-                        value={item.description}
-                        onChange={(e) =>
-                          handleItemChange("food", idx, "description", e.target.value)
-                        }
-                        label="Description"
-                        type="text"
-                        className="w-full"
-                      />
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("food", idx, files)
-                        }
-                        fieldName={`food-${idx}`}
-                      />
-                      <div className="flex gap-3 ml-8">
-                        <button
-                          type="button"
-                          onClick={() => removeItem("food", idx)}
-                          className="px-2 py-1 bg-red-500 text-white rounded"
-                          disabled={form.food.length <= 1}
-                        >
-                          -
-                        </button>
-                        {idx === form.food.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => addItem("food")}
-                            className="px-2 py-1 bg-blue-500 text-white rounded"
-                          >
-                            +
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {form.fuel.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                     <Input
-                      name={`fuel-${idx}-description`}
-                      value={item.description}
-                      onChange={(e) =>
-                        handleItemChange("fuel", idx, "description", e.target.value)
-                      }
-                      label={`Description`}
-                      type="text"
-                      className="w-full"
-                    />
-                    <Input
-                      name={`fuel-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange("fuel", idx, "amount", e.target.value)
-                      }
-                      label={`Fuel ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                   
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("fuel", idx, files)
-                      }
-                      fieldName={`fuel-${idx}`}
-                    />
-                    <div className="flex gap-3 ml-8">
                       <button
                         type="button"
                         onClick={() => removeItem("fuel", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.fuel.length <= 1}
                       >
                         -
@@ -1222,7 +990,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("fuel")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1230,60 +998,57 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                     </div>
                   </div>
                 ))}
-                {form.transport.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`transport-${idx}-description`}
-                      value={item.description}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "transport",
-                          idx,
-                          "description",
-                          e.target.value
-                        )
-                      }
-                      label={`Description`}
-                      type="text"
-                      className="w-full"
-                    />
-                    <Input
-                      name={`transport-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange(
-                          "transport",
-                          idx,
-                          "amount",
-                          e.target.value
-                        )
-                      }
-                      label={`Transport ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("transport", idx, files)
-                      }
-                      fieldName={`transport-${idx}`}
-                    />
-                    <div className="flex gap-3 ml-4">
+
+                {/* Entertainment section */}
+                {form.entertainment.map((item, idx) => (
+                  <div key={`entertainment-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Entertainment {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`entertainment-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("entertainment", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`entertainment-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("entertainment", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("entertainment", idx, files)
+                          }
+                          fieldName={`entertainment-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
-                        onClick={() => removeItem("transport", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
-                        disabled={form.transport.length <= 1}
+                        onClick={() => removeItem("entertainment", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.entertainment.length <= 1}
                       >
                         -
                       </button>
-                      {idx === form.transport.length - 1 && (
+                      {idx === form.entertainment.length - 1 && (
                         <button
                           type="button"
-                          onClick={() => addItem("transport")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          onClick={() => addItem("entertainment")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1291,41 +1056,106 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                     </div>
                   </div>
                 ))}
+
+                {/* Utility section */}
+                {form.utility.map((item, idx) => (
+                  <div key={`utility-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Utility {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`utility-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("utility", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`utility-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("utility", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("utility", idx, files)
+                          }
+                          fieldName={`utility-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("utility", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.utility.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.utility.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("utility")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Hotel section */}
                 {form.hotel.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <Input
-                      name={`hotel-${idx}-description`}
-                      value={item.description}
-                      onChange={(e) =>
-                        handleItemChange("hotel", idx, "description", e.target.value)
-                      }
-                      label={`Description`}
-                      type="text"
-                      className="w-full"
-                    />
-                    <Input
-                      name={`hotel-${idx}-amount`}
-                      value={item.amount}
-                      onChange={(e) =>
-                        handleItemChange("hotel", idx, "amount", e.target.value)
-                      }
-                      label={`Hotel ${idx + 1}`}
-                      type="number"
-                      min="0"
-                    />
-                    
-                    <FileUploadArea
-                      files={item.files}
-                      setFiles={(files) =>
-                        handleItemFilesChange("hotel", idx, files)
-                      }
-                      fieldName={`hotel-${idx}`}
-                    />
-                    <div className="flex gap-3 ml-4">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Hotel {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`hotel-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("hotel", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`hotel-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("hotel", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("hotel", idx, files)
+                          }
+                          fieldName={`hotel-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("hotel", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.hotel.length <= 1}
                       >
                         -
@@ -1334,7 +1164,65 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("hotel")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Miscellaneous section */}
+                {form.miscellaneous.map((item, idx) => (
+                  <div key={`miscellaneous-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Miscellaneous {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`miscellaneous-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("miscellaneous", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`miscellaneous-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("miscellaneous", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("miscellaneous", idx, files)
+                          }
+                          fieldName={`miscellaneous-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("miscellaneous", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.miscellaneous.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.miscellaneous.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("miscellaneous")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1344,84 +1232,362 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 ))}
               </div>
             )}
+
+            {form.category === "official" && (
+              <div className="space-y-4">
+                {form.food.map((item, idx) => (
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Food {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`food-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("food", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`food-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("food", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("food", idx, files)
+                          }
+                          fieldName={`food-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("food", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.food.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.food.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("food")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Fuel section */}
+                {form.fuel.map((item, idx) => (
+                  <div key={`fuel-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Fuel {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`fuel-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("fuel", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`fuel-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("fuel", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("fuel", idx, files)
+                          }
+                          fieldName={`fuel-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("fuel", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.fuel.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.fuel.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("fuel")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Transport section */}
+                {form.transport.map((item, idx) => (
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Transport {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`transport-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("transport", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`transport-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("transport", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("transport", idx, files)
+                          }
+                          fieldName={`transport-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("transport", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.transport.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.transport.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("transport")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Hotel section */}
+                {form.hotel.map((item, idx) => (
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Hotel {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`hotel-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("hotel", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`hotel-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("hotel", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("hotel", idx, files)
+                          }
+                          fieldName={`hotel-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("hotel", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.hotel.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.hotel.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("hotel")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Miscellaneous section */}
+                {form.miscellaneous.map((item, idx) => (
+                  <div key={`miscellaneous-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Miscellaneous {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
+                      <Input
+                        name={`miscellaneous-${idx}-description`}
+                        value={item.description}
+                        onChange={(e) =>
+                          handleItemChange("miscellaneous", idx, "description", e.target.value)
+                        }
+                        placeholder="Description"
+                        type="text"
+                        className="grow px-4"
+                      />
+                      <Input
+                        name={`miscellaneous-${idx}-amount`}
+                        value={item.amount}
+                        onChange={(e) =>
+                          handleItemChange("miscellaneous", idx, "amount", e.target.value)
+                        }
+                        placeholder="Amount"
+                        type="number"
+                        min="0"
+                        className="w-32 px-4"
+                      />
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("miscellaneous", idx, files)
+                          }
+                          fieldName={`miscellaneous-${idx}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem("miscellaneous", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.miscellaneous.length <= 1}
+                      >
+                        -
+                      </button>
+                      {idx === form.miscellaneous.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => addItem("miscellaneous")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {form.category === "site" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-4">
-                  <label className="block" style={{ color: 'var(--foreground)' }}>
-                    <span className="block mb-1 text-sm font-semibold" style={{ color: 'var(--secondary)' }}>Site Name</span>
-                    <input
+              <div className="space-y-4">
+                <div className="mb-4">
+                  <div className="text-sm mb-2 text-gray-600">Site Name</div>
+                  <div className="flex items-center space-x-4 w-full">
+                    <Input
                       name="siteName"
                       value={form.siteName}
                       onChange={handleChange}
                       list="site-names"
-                      className="themed-input w-full px-4 py-3 border rounded focus:outline-none focus:ring-2 text-base"
-                      style={{
-                        background: 'var(--surface)',
-                        color: 'var(--foreground)',
-                        border: '1px solid black',
-                        fontFamily: 'var(--font-sans)',
-                        boxShadow: 'none',
-                        minHeight: '45px',
-                      }}
                       placeholder="Enter or select site name"
+                      type="text"
+                      className="grow px-4"
                     />
                     <datalist id="site-names">
                       {siteNames.map(site => (
                         <option key={site} value={site} />
                       ))}
                     </datalist>
-                  </label>
+                  </div>
                 </div>
+
                 {form.labour.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Labour {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
                         name={`labour-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "labour",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("labour", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
                         name={`labour-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
-                          handleItemChange(
-                            "labour",
-                            idx,
-                            "amount",
-                            e.target.value
-                          )
+                          handleItemChange("labour", idx, "amount", e.target.value)
                         }
-                        label={`Labour ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("labour", idx, files)
-                        }
-                        fieldName={`labour-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-4">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("labour", idx, files)
+                          }
+                          fieldName={`labour-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("labour", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.labour.length <= 1}
                       >
                         -
@@ -1430,7 +1596,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("labour")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1438,56 +1604,47 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                     </div>
                   </div>
                 ))}
+
                 {form.travel.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Travel {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
                         name={`travel-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "travel",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("travel", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
                         name={`travel-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
-                          handleItemChange(
-                            "travel",
-                            idx,
-                            "amount",
-                            e.target.value
-                          )
+                          handleItemChange("travel", idx, "amount", e.target.value)
                         }
-                        label={`Travel ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("travel", idx, files)
-                        }
-                        fieldName={`travel-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-4">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("travel", idx, files)
+                          }
+                          fieldName={`travel-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("travel", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.travel.length <= 1}
                       >
                         -
@@ -1496,7 +1653,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("travel")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1505,50 +1662,45 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   </div>
                 ))}
                 {form.tools.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Tools {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
                         name={`tools-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "tools",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("tools", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
                         name={`tools-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
                           handleItemChange("tools", idx, "amount", e.target.value)
                         }
-                        label={`Tools ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("tools", idx, files)
-                        }
-                        fieldName={`tools-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-4">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("tools", idx, files)
+                          }
+                          fieldName={`tools-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("tools", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.tools.length <= 1}
                       >
                         -
@@ -1557,7 +1709,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("tools")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1566,55 +1718,45 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   </div>
                 ))}
                 {form.consumables.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Consumables {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
                         name={`consumables-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "consumables",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("consumables", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
                         name={`consumables-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
-                          handleItemChange(
-                            "consumables",
-                            idx,
-                            "amount",
-                            e.target.value
-                          )
+                          handleItemChange("consumables", idx, "amount", e.target.value)
                         }
-                        label={`Consumables ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("consumables", idx, files)
-                        }
-                        fieldName={`consumables-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-4">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("consumables", idx, files)
+                          }
+                          fieldName={`consumables-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("consumables", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.consumables.length <= 1}
                       >
                         -
@@ -1623,7 +1765,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("consumables")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1632,50 +1774,45 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   </div>
                 ))}
                 {form.stay.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Stay {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
                         name={`stay-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "stay",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("stay", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
                         name={`stay-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
                           handleItemChange("stay", idx, "amount", e.target.value)
                         }
-                        label={`Stay ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("stay", idx, files)
-                        }
-                        fieldName={`stay-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-8">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("stay", idx, files)
+                          }
+                          fieldName={`stay-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("stay", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.stay.length <= 1}
                       >
                         -
@@ -1684,7 +1821,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("stay")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1693,55 +1830,45 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   </div>
                 ))}
                 {form.transportOfMaterial.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Transport of Material {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
                         name={`transportOfMaterial-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "transportOfMaterial",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("transportOfMaterial", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
                         name={`transportOfMaterial-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
-                          handleItemChange(
-                            "transportOfMaterial",
-                            idx,
-                            "amount",
-                            e.target.value
-                          )
+                          handleItemChange("transportOfMaterial", idx, "amount", e.target.value)
                         }
-                        label={`Transport of Material ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("transportOfMaterial", idx, files)
-                        }
-                        fieldName={`transportOfMaterial-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-8">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("transportOfMaterial", idx, files)
+                          }
+                          fieldName={`transportOfMaterial-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem("transportOfMaterial", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
                         disabled={form.transportOfMaterial.length <= 1}
                       >
                         -
@@ -1750,7 +1877,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                         <button
                           type="button"
                           onClick={() => addItem("transportOfMaterial")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
@@ -1759,64 +1886,60 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   </div>
                 ))}
                 {form.localCommute.map((item, idx) => (
-                  <div key={idx} className="flex items-end gap-2">
-                    <div className="w-1/2">
+                  <div key={idx} className="mb-4">
+                  </div>
+                ))}
+
+                {/* Miscellaneous section */}
+                {form.miscellaneous.map((item, idx) => (
+                  <div key={`miscellaneous-${idx}`} className="mb-4">
+                    <div className="text-sm mb-2 text-gray-600">
+                      Miscellaneous {idx + 1}
+                    </div>
+                    <div className="flex items-center space-x-4 w-full">
                       <Input
-                        name={`localCommute-${idx}-description`}
+                        name={`miscellaneous-${idx}-description`}
                         value={item.description}
                         onChange={(e) =>
-                          handleItemChange(
-                            "localCommute",
-                            idx,
-                            "description",
-                            e.target.value
-                          )
+                          handleItemChange("miscellaneous", idx, "description", e.target.value)
                         }
-                        label="Description"
+                        placeholder="Description"
                         type="text"
-                        className="w-full"
+                        className="grow px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
                       <Input
-                        name={`localCommute-${idx}-amount`}
+                        name={`miscellaneous-${idx}-amount`}
                         value={item.amount}
                         onChange={(e) =>
-                          handleItemChange(
-                            "localCommute",
-                            idx,
-                            "amount",
-                            e.target.value
-                          )
+                          handleItemChange("miscellaneous", idx, "amount", e.target.value)
                         }
-                        label={`Local Commute ${idx + 1}`}
+                        placeholder="Amount"
                         type="number"
                         min="0"
+                        className="w-32 px-4"
                       />
-                    </div>
-                    <div className="w-1/4">
-                      <FileUploadArea
-                        files={item.files}
-                        setFiles={(files) =>
-                          handleItemFilesChange("localCommute", idx, files)
-                        }
-                        fieldName={`localCommute-${idx}`}
-                      />
-                    </div>
-                    <div className="flex gap-3 ml-8">
+                      <div className="shrink-0">
+                        <FileUploadArea
+                          files={item.files}
+                          setFiles={(files) =>
+                            handleItemFilesChange("miscellaneous", idx, files)
+                          }
+                          fieldName={`miscellaneous-${idx}`}
+                        />
+                      </div>
                       <button
                         type="button"
-                        onClick={() => removeItem("localCommute", idx)}
-                        className="px-2 py-1 bg-red-500 text-white rounded"
-                        disabled={form.localCommute.length <= 1}
+                        onClick={() => removeItem("miscellaneous", idx)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 min-w-8"
+                        disabled={form.miscellaneous.length <= 1}
                       >
                         -
                       </button>
-                      {idx === form.localCommute.length - 1 && (
+                      {idx === form.miscellaneous.length - 1 && (
                         <button
                           type="button"
-                          onClick={() => addItem("localCommute")}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
+                          onClick={() => addItem("miscellaneous")}
+                          className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 min-w-8"
                         >
                           +
                         </button>
