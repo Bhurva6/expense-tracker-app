@@ -856,7 +856,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               <Input
                 type="date"
                 name="date"
-                value={new Date().toISOString().split('T')[0]}
+                value={new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }).split(',')[0].split('/').map(n => n.padStart(2, '0')).reverse().join('-')}
                 readOnly
                 required
                 label="Date"
