@@ -13,6 +13,12 @@ import { useRouter } from "next/navigation";
 import { db } from "../lib/firebase";
 import { sendNewExpenseNotification } from "../lib/emailService";
 
+// Helper function to safely format amounts
+const formatAmount = (amount: any): string => {
+  const num = Number(amount) || 0;
+  return isNaN(num) ? '0' : num.toLocaleString();
+};
+
 const FileUploadArea = ({
   files,
   setFiles,
@@ -121,7 +127,7 @@ type ExpenseFormState = {
 };
 
 const initialState: ExpenseFormState = {
-  date: "",
+  date: new Date().toISOString().split('T')[0],
   category: "",
   food: [{ amount: "", description: "", files: [] }],
   fuel: [{ amount: "", description: "", files: [] }],
@@ -856,8 +862,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               <Input
                 type="date"
                 name="date"
-                value={new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }).split(',')[0].split('/').map(n => n.padStart(2, '0')).reverse().join('-')}
-                readOnly
+                value={form.date || new Date().toISOString().split('T')[0]}
+                onChange={handleChange}
                 required
                 label="Date"
               />
@@ -1969,7 +1975,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             />
 
             <div className="font-bold" style={{ color: "var(--primary)" }}>
-              Total: ₹{total}
+              Total: ₹{formatAmount(total)}
             </div>
             <Button
               type="submit"

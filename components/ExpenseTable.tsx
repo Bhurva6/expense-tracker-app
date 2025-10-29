@@ -12,6 +12,12 @@ export default function ExpenseTable() {
   const [error, setError] = useState('');
 
   // Calculate spending statistics
+  // Helper function to safely format amounts
+  const formatAmount = (amount: any): string => {
+    const num = Number(amount) || 0;
+    return isNaN(num) ? '0' : num.toLocaleString();
+  };
+
   const calculateStats = () => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -87,19 +93,19 @@ export default function ExpenseTable() {
         {/* Total Spend */}
         <div className="p-4 rounded-lg shadow-md" style={{ background: 'var(--surface)', borderLeft: '4px solid #3b82f6' }}>
           <h3 className="text-sm font-medium text-gray-500">Total Spend</h3>
-          <p className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>₹{totalSpend.toLocaleString()}</p>
+          <p className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>₹{formatAmount(totalSpend)}</p>
         </div>
         
         {/* This Month */}
         <div className="p-4 rounded-lg shadow-md" style={{ background: 'var(--surface)', borderLeft: '4px solid #10b981' }}>
           <h3 className="text-sm font-medium text-gray-500">This Month</h3>
-          <p className="text-2xl font-bold" style={{ color: '#10b981' }}>₹{monthSpend.toLocaleString()}</p>
+          <p className="text-2xl font-bold" style={{ color: '#10b981' }}>₹{formatAmount(monthSpend)}</p>
         </div>
         
         {/* This Week */}
         <div className="p-4 rounded-lg shadow-md" style={{ background: 'var(--surface)', borderLeft: '4px solid #f59e0b' }}>
           <h3 className="text-sm font-medium text-gray-500">This Week</h3>
-          <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>₹{weekSpend.toLocaleString()}</p>
+          <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>₹{formatAmount(weekSpend)}</p>
         </div>
         
         {/* Top Category */}
@@ -111,7 +117,7 @@ export default function ExpenseTable() {
                 {Object.entries(categorySpend).sort(([,a], [,b]) => b - a)[0][0]}
               </p>
               <p className="text-sm text-gray-500">
-                ₹{Object.entries(categorySpend).sort(([,a], [,b]) => b - a)[0][1].toLocaleString()}
+                ₹{formatAmount(Object.entries(categorySpend).sort(([,a], [,b]) => b - a)[0][1])}
               </p>
             </>
           ) : (
@@ -130,7 +136,7 @@ export default function ExpenseTable() {
               .map(([category, amount]) => (
                 <div key={category} className="p-3 rounded border" style={{ background: 'var(--accent-light)', borderColor: 'var(--muted)' }}>
                   <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{category}</p>
-                  <p className="text-lg font-bold" style={{ color: 'var(--primary)' }}>₹{amount.toLocaleString()}</p>
+                  <p className="text-lg font-bold" style={{ color: 'var(--primary)' }}>₹{formatAmount(amount)}</p>
                   <p className="text-xs text-gray-500">
                     {((amount / totalSpend) * 100).toFixed(1)}% of total
                   </p>
@@ -157,7 +163,7 @@ export default function ExpenseTable() {
               <tr key={exp.id} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--accent-light)', borderRadius: 8 }}>
                 <td className="px-4 py-2 align-top rounded-l-lg">{new Date(exp.createdAt.seconds * 1000).toLocaleDateString()}</td>
                 <td className="px-4 py-2 align-top">{exp.purpose || exp.category}</td>
-                <td className="px-4 py-2 align-top text-right">₹{exp.total}</td>
+                <td className="px-4 py-2 align-top text-right">₹{formatAmount(exp.total)}</td>
                 <td className="px-4 py-2 align-top text-center">
                   <span
                     className="inline-block px-2 py-1 rounded text-xs font-semibold"

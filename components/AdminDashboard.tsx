@@ -9,6 +9,7 @@ import { Dialog } from '@headlessui/react';
 import { useAuth } from '../context/AuthContext';
 import { sendStatusChangeNotification, sendExpenseClosedNotification } from '../lib/emailService';
 import EmailTestComponent from './EmailTestComponent';
+import { useRouter } from 'next/navigation';
 
 const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
@@ -19,6 +20,7 @@ const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [expenses, setExpenses] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]); // Store all expenses for dropdown options
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,7 @@ export default function AdminDashboard() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isExpandedView, setIsExpandedView] = useState(true);
   const [showEmailTest, setShowEmailTest] = useState(false);
+  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'review', 'approve', 'accounts'
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -292,9 +295,15 @@ export default function AdminDashboard() {
       
       // Status counts
       const status = exp.status || 'Under Review';
-      if (status === 'Approve') totalApproved++;
-      else if (status === 'Reject') totalRejected++;
-      else totalUnderReview++;
+      if (status === 'Final Approved' || exp.finalApproval === true) {
+        totalApproved++;
+      } else if (status === 'Approve') {
+        totalApproved++; // Initial approval counts as approved
+      } else if (status === 'Reject') {
+        totalRejected++;
+      } else {
+        totalUnderReview++;
+      }
       
       // Closed expenses
       if (exp.locked || exp.paidDate) totalClosed++;
@@ -407,6 +416,792 @@ export default function AdminDashboard() {
     return /\.(jpe?g|png|webp|avif|gif|svg)$/.test(url.toLowerCase());
   };
 
+  // Helper function to safely format amounts
+  const formatAmount = (amount: any): string => {
+    const num = Number(amount);
+    return isNaN(num) ? '0' : num.toLocaleString();
+  };
+
+  // Component for Review View
+  const ReviewComponent = () => (
+    <div className="space-y-6">
+      <h3 className="text-xl font-semibold" style={{ color: 'var(--primary)' }}>Review Expenses</h3>
+      <div className="p-6 rounded-lg" style={{ background: 'var(--accent-light)' }}>
+        <p className="text-center text-lg mb-6" style={{ color: 'var(--foreground)' }}>
+          📋 Review expenses that need attention - View details, approve or reject
+        </p>
+        <div className="grid gap-6">
+          {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).map(exp => (
+            <div key={exp.id} className="p-6 rounded-lg border" style={{ background: 'var(--surface)', borderColor: 'var(--muted)' }}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Expense Details */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-lg" style={{ color: 'var(--primary)' }}>{exp.user?.name || 'Unknown'}</h4>
+                      <p className="text-sm text-gray-500">{exp.user?.department || 'No Department'} • {exp.user?.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-xl" style={{ color: 'var(--primary)' }}>₹{formatAmount(exp.total)}</div>
+                      <div className="text-sm text-gray-500">{exp.date}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div><strong>Purpose:</strong> {exp.purpose || 'Not specified'}</div>
+                    <div><strong>Category:</strong> {exp.category || 'Not specified'}</div>
+                    {exp.notes && <div><strong>Notes:</strong> {exp.notes}</div>}
+                    <div><strong>Submitted:</strong> {exp.createdAt?.toDate ? exp.createdAt.toDate().toLocaleString() : 'Unknown'}</div>
+                    {exp.location && exp.location.address && (
+                      <div><strong>Location:</strong> 📍 {exp.location.address}</div>
+                    )}
+                  </div>
+
+                  {/* Expense Breakdown */}
+                  <div className="space-y-2 p-3 rounded" style={{ background: 'var(--accent-light)' }}>
+                    <h5 className="font-semibold">Expense Breakdown:</h5>
+                    {exp.category === 'personal' && (
+                      <>
+                        {exp.food && exp.food.length > 0 && <div>Food: ₹{formatAmount(exp.food.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.fuel && exp.fuel.length > 0 && <div>Fuel: ₹{formatAmount(exp.fuel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.entertainment && exp.entertainment.length > 0 && <div>Entertainment: ₹{formatAmount(exp.entertainment.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.utility && exp.utility.length > 0 && <div>Utility: ₹{formatAmount(exp.utility.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.home && exp.home.length > 0 && <div>Home: ₹{formatAmount(exp.home.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.travel && exp.travel.length > 0 && <div>Travel: ₹{formatAmount(exp.travel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.grocery && exp.grocery.length > 0 && <div>Grocery: ₹{formatAmount(exp.grocery.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.miscellaneous && exp.miscellaneous.length > 0 && <div>Miscellaneous: ₹{formatAmount(exp.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                      </>
+                    )}
+                    {exp.category === 'official' && (
+                      <>
+                        {exp.food && exp.food.length > 0 && <div>Food: ₹{formatAmount(exp.food.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.fuel && exp.fuel.length > 0 && <div>Fuel: ₹{formatAmount(exp.fuel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.transport && exp.transport.length > 0 && <div>Transport: ₹{formatAmount(exp.transport.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.hotel && exp.hotel.length > 0 && <div>Hotel: ₹{formatAmount(exp.hotel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.miscellaneous && exp.miscellaneous.length > 0 && <div>Miscellaneous: ₹{formatAmount(exp.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                      </>
+                    )}
+                    {exp.category === 'site' && (
+                      <>
+                        {exp.siteName && <div>Site: {exp.siteName}</div>}
+                        {exp.labour && exp.labour.length > 0 && <div>Labour: ₹{formatAmount(exp.labour.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.travel && exp.travel.length > 0 && <div>Travel: ₹{formatAmount(exp.travel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.tools && exp.tools.length > 0 && <div>Tools: ₹{formatAmount(exp.tools.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.consumables && exp.consumables.length > 0 && <div>Consumables: ₹{formatAmount(exp.consumables.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.stay && exp.stay.length > 0 && <div>Stay: ₹{formatAmount(exp.stay.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.transportOfMaterial && exp.transportOfMaterial.length > 0 && <div>Transport of Material: ₹{formatAmount(exp.transportOfMaterial.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.localCommute && exp.localCommute.length > 0 && <div>Local Commute: ₹{formatAmount(exp.localCommute.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                        {exp.miscellaneous && exp.miscellaneous.length > 0 && <div>Miscellaneous: ₹{formatAmount(exp.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                      </>
+                    )}
+                    {(!exp.category || exp.category === '') && exp.others && exp.others.length > 0 && (
+                      <>
+                        {exp.others.map((other: any, idx: number) => (
+                          <div key={idx}>{other.label || `Other ${idx + 1}`}: ₹{formatAmount(other.amount)}</div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Documents and Actions */}
+                <div className="space-y-4">
+                  {/* Documents */}
+                  {(exp.file || (exp.billImages && exp.billImages.length > 0)) && (
+                    <div>
+                      <h5 className="font-semibold mb-3" style={{ color: 'var(--primary)' }}>Uploaded Documents</h5>
+                      <div className="space-y-3">
+                        {exp.file && (
+                          <div>
+                            <strong>Main Document:</strong>
+                            {isImageUrl(exp.file) ? (
+                              <div className="mt-2">
+                                <a href={exp.file} target="_blank" rel="noopener noreferrer">
+                                  <img 
+                                    src={exp.file} 
+                                    alt="Expense proof" 
+                                    className="max-w-full h-auto rounded max-h-40 object-contain border cursor-pointer hover:shadow-lg transition-shadow" 
+                                    style={{ border: '1px solid var(--muted)' }} 
+                                  />
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="mt-2">
+                                <a 
+                                  href={exp.file} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="inline-block px-3 py-2 rounded border hover:shadow-lg transition-shadow"
+                                  style={{ background: 'var(--accent)', color: 'var(--surface)' }}
+                                >
+                                  📄 View Document
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {exp.billImages && exp.billImages.length > 0 && (
+                          <div>
+                            <strong>Bill Images:</strong>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {exp.billImages.map((url: string, idx: number) => (
+                                <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                                  <img 
+                                    src={url} 
+                                    alt={`Bill proof ${idx + 1}`} 
+                                    className="w-20 h-20 object-cover rounded border cursor-pointer hover:w-24 hover:h-24 transition-all duration-200" 
+                                    style={{ border: '1px solid var(--muted)' }} 
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Review Actions */}
+                  <div className="space-y-4 p-4 rounded" style={{ background: 'var(--accent-light)' }}>
+                    <h5 className="font-semibold" style={{ color: 'var(--primary)' }}>Review Actions</h5>
+                    
+                    {/* Comment Input */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Comment</label>
+                      <textarea
+                        value={remarksDraft[exp.id] !== undefined ? remarksDraft[exp.id] : (exp.remarks || '')}
+                        onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                        placeholder="Add your comments about this expense..."
+                        className="w-full p-3 border rounded resize-none"
+                        style={{ 
+                          background: 'var(--surface)', 
+                          color: 'var(--foreground)', 
+                          borderColor: 'var(--muted)',
+                          minHeight: '80px'
+                        }}
+                        rows={3}
+                      />
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <Button 
+                        onClick={() => {
+                          if (remarksDraft[exp.id] !== undefined) {
+                            handleRemarksChange(exp.id, remarksDraft[exp.id]);
+                          }
+                          handleStatusChange(exp.id, 'Approve');
+                        }}
+                        className="flex-1 py-3 font-semibold"
+                        style={{ background: '#22c55e', color: '#ffffff' }}
+                      >
+                        ✅ Approve
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          if (remarksDraft[exp.id] !== undefined) {
+                            handleRemarksChange(exp.id, remarksDraft[exp.id]);
+                          }
+                          handleStatusChange(exp.id, 'Reject');
+                        }}
+                        className="flex-1 py-3 font-semibold"
+                        style={{ background: '#ef4444', color: '#ffffff' }}
+                      >
+                        ❌ Reject
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-lg text-gray-500">🎉 No expenses pending review!</p>
+              <p className="text-sm text-gray-400 mt-2">All submitted expenses have been reviewed.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Component for Approve View - Shows approved expenses awaiting final confirmation
+  const ApproveComponent = () => {
+    const approvedExpenses = expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval);
+    
+    const handleFinalApprove = async (expenseId: string) => {
+      try {
+        const now = new Date().toLocaleString();
+        const finalApprovedBy = {
+          name: user?.displayName || user?.email || 'Unknown Admin',
+          email: user?.email || 'unknown@admin.com',
+          timestamp: now
+        };
+        
+        await updateDoc(doc(db, 'expenses', expenseId), { 
+          finalApproval: true,
+          finalApprovedBy,
+          finalApprovalTimestamp: now,
+          status: 'Final Approved' // This will move it to accounts
+        });
+        
+        fetchExpenses();
+      } catch (error) {
+        console.error('Error in final approval:', error);
+      }
+    };
+    
+    const handleRejectFromApprove = async (expenseId: string) => {
+      try {
+        const now = new Date().toLocaleString();
+        const rejectedBy = {
+          name: user?.displayName || user?.email || 'Unknown Admin',
+          email: user?.email || 'unknown@admin.com',
+          timestamp: now
+        };
+        
+        await updateDoc(doc(db, 'expenses', expenseId), { 
+          status: 'Under Review', // Move back to review
+          finalApproval: false,
+          rejectedBy,
+          rejectionTimestamp: now
+        });
+        
+        fetchExpenses();
+      } catch (error) {
+        console.error('Error rejecting expense:', error);
+      }
+    };
+    
+    return (
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold" style={{ color: 'var(--primary)' }}>Approval Confirmation</h3>
+        <div className="p-6 rounded-lg" style={{ background: 'var(--accent-light)' }}>
+          <p className="text-center text-lg mb-6" style={{ color: 'var(--foreground)' }}>
+            ✅ Review approved expenses and provide final confirmation before sending to accounts
+          </p>
+          
+          {approvedExpenses.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-lg text-gray-500">📋 No expenses awaiting final approval!</p>
+              <p className="text-sm text-gray-400 mt-2">Expenses will appear here after initial approval in the Review section.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {approvedExpenses.map(exp => (
+                <div key={exp.id} className="p-6 rounded-lg shadow-md" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Employee & Basic Info */}
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-semibold text-lg" style={{ color: 'var(--primary)' }}>{exp.user?.name || 'Unknown'}</h4>
+                        <p className="text-sm text-gray-500">{exp.user?.department || 'No Department'}</p>
+                        <p className="text-xs text-gray-400">{exp.user?.email}</p>
+                      </div>
+                      
+                      <div className="p-3 rounded" style={{ background: '#22c55e', color: '#ffffff' }}>
+                        <div className="font-semibold text-center text-sm">✅ INITIALLY APPROVED</div>
+                        {exp.actionBy && (
+                          <div className="text-xs text-center mt-1 opacity-90">
+                            by {exp.actionBy.name}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div><strong>Date:</strong> {exp.date}</div>
+                        <div><strong>Category:</strong> {exp.category || 'Not specified'}</div>
+                        <div><strong>Purpose:</strong> {exp.purpose || 'Not specified'}</div>
+                        <div><strong>Submitted:</strong> {exp.createdAt?.toDate ? exp.createdAt.toDate().toLocaleDateString() : 'Unknown'}</div>
+                        {exp.location && exp.location.address && (
+                          <div><strong>Location:</strong> 📍 {exp.location.address}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expense Details & Amount */}
+                    <div className="space-y-3">
+                      <div className="text-center p-4 rounded" style={{ background: 'var(--accent-light)' }}>
+                        <div className="font-bold text-2xl" style={{ color: 'var(--primary)' }}>₹{formatAmount(exp.total)}</div>
+                        <div className="text-sm text-gray-500 mt-1">Total Amount</div>
+                      </div>
+                      
+                      {/* Expense Breakdown */}
+                      <div className="space-y-2 p-3 rounded text-sm" style={{ background: 'var(--accent-light)' }}>
+                        <h5 className="font-semibold">Expense Breakdown:</h5>
+                        {exp.category === 'personal' && (
+                          <>
+                            {exp.food && exp.food.length > 0 && <div>• Food: ₹{formatAmount(exp.food.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.fuel && exp.fuel.length > 0 && <div>• Fuel: ₹{formatAmount(exp.fuel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.travel && exp.travel.length > 0 && <div>• Travel: ₹{formatAmount(exp.travel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.entertainment && exp.entertainment.length > 0 && <div>• Entertainment: ₹{formatAmount(exp.entertainment.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.utility && exp.utility.length > 0 && <div>• Utility: ₹{formatAmount(exp.utility.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.home && exp.home.length > 0 && <div>• Home: ₹{formatAmount(exp.home.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.grocery && exp.grocery.length > 0 && <div>• Grocery: ₹{formatAmount(exp.grocery.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.miscellaneous && exp.miscellaneous.length > 0 && <div>• Miscellaneous: ₹{formatAmount(exp.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                          </>
+                        )}
+                        {exp.category === 'official' && (
+                          <>
+                            {exp.food && exp.food.length > 0 && <div>• Food: ₹{formatAmount(exp.food.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.fuel && exp.fuel.length > 0 && <div>• Fuel: ₹{formatAmount(exp.fuel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.transport && exp.transport.length > 0 && <div>• Transport: ₹{formatAmount(exp.transport.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.hotel && exp.hotel.length > 0 && <div>• Hotel: ₹{formatAmount(exp.hotel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.miscellaneous && exp.miscellaneous.length > 0 && <div>• Miscellaneous: ₹{formatAmount(exp.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                          </>
+                        )}
+                        {exp.category === 'site' && (
+                          <>
+                            {exp.siteName && <div>• Site: {exp.siteName}</div>}
+                            {exp.labour && exp.labour.length > 0 && <div>• Labour: ₹{formatAmount(exp.labour.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.travel && exp.travel.length > 0 && <div>• Travel: ₹{formatAmount(exp.travel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.tools && exp.tools.length > 0 && <div>• Tools: ₹{formatAmount(exp.tools.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.consumables && exp.consumables.length > 0 && <div>• Consumables: ₹{formatAmount(exp.consumables.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.stay && exp.stay.length > 0 && <div>• Stay: ₹{formatAmount(exp.stay.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.transportOfMaterial && exp.transportOfMaterial.length > 0 && <div>• Transport of Material: ₹{formatAmount(exp.transportOfMaterial.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.localCommute && exp.localCommute.length > 0 && <div>• Local Commute: ₹{formatAmount(exp.localCommute.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                            {exp.miscellaneous && exp.miscellaneous.length > 0 && <div>• Miscellaneous: ₹{formatAmount(exp.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</div>}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Previous Comments */}
+                      {exp.remarks && (
+                        <div>
+                          <h6 className="font-semibold text-sm mb-2">Previous Comments:</h6>
+                          <div className="p-3 rounded text-sm" style={{ background: 'var(--accent-light)' }}>
+                            {exp.remarks}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Documents & Final Actions */}
+                    <div className="space-y-4">
+                      {/* Documents */}
+                      {(exp.file || (exp.billImages && exp.billImages.length > 0)) && (
+                        <div>
+                          <h5 className="font-semibold mb-3" style={{ color: 'var(--primary)' }}>Uploaded Documents</h5>
+                          <div className="space-y-3">
+                            {exp.file && (
+                              <div>
+                                <strong>Main Document:</strong>
+                                {isImageUrl(exp.file) ? (
+                                  <div className="mt-2">
+                                    <a href={exp.file} target="_blank" rel="noopener noreferrer">
+                                      <img 
+                                        src={exp.file} 
+                                        alt="Expense proof" 
+                                        className="max-w-full h-auto rounded max-h-32 object-contain border cursor-pointer hover:shadow-lg transition-shadow" 
+                                        style={{ border: '1px solid var(--muted)' }} 
+                                      />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div className="mt-2">
+                                    <a 
+                                      href={exp.file} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer" 
+                                      className="inline-block px-3 py-2 rounded border hover:shadow-lg transition-shadow text-sm"
+                                      style={{ background: 'var(--accent)', color: 'var(--surface)' }}
+                                    >
+                                      � View Document
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {exp.billImages && exp.billImages.length > 0 && (
+                              <div>
+                                <strong>Bill Images:</strong>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {exp.billImages.map((url: string, idx: number) => (
+                                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                                      <img 
+                                        src={url} 
+                                        alt={`Bill ${idx + 1}`} 
+                                        className="w-16 h-16 object-cover rounded border cursor-pointer hover:w-20 hover:h-20 transition-all duration-200" 
+                                        style={{ border: '1px solid var(--muted)' }} 
+                                      />
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Final Approval Actions */}
+                      <div className="space-y-4 p-4 rounded" style={{ background: 'var(--accent-light)' }}>
+                        <h5 className="font-semibold" style={{ color: 'var(--primary)' }}>Final Approval Decision</h5>
+                        
+                        {/* Additional Comment */}
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Final Comment (Optional)</label>
+                          <textarea
+                            value={remarksDraft[exp.id] || ''}
+                            onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                            placeholder="Add final approval comments..."
+                            className="w-full p-3 border rounded resize-none"
+                            style={{ 
+                              background: 'var(--surface)', 
+                              color: 'var(--foreground)', 
+                              borderColor: 'var(--muted)',
+                              minHeight: '60px'
+                            }}
+                            rows={2}
+                          />
+                        </div>
+
+                        {/* Final Action Buttons */}
+                        <div className="flex gap-3">
+                          <Button 
+                            onClick={() => {
+                              if (remarksDraft[exp.id]) {
+                                handleRemarksChange(exp.id, remarksDraft[exp.id]);
+                              }
+                              handleFinalApprove(exp.id);
+                            }}
+                            className="flex-1 py-3 font-semibold"
+                            style={{ background: '#22c55e', color: '#ffffff' }}
+                          >
+                            ✅ Send to Accounts
+                          </Button>
+                          <Button 
+                            onClick={() => {
+                              if (remarksDraft[exp.id]) {
+                                handleRemarksChange(exp.id, remarksDraft[exp.id]);
+                              }
+                              handleRejectFromApprove(exp.id);
+                            }}
+                            className="flex-1 py-3 font-semibold"
+                            style={{ background: '#ef4444', color: '#ffffff' }}
+                          >
+                            ❌ Send Back to Review
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Component for Accounts View - Shows expenses that have been finally approved
+  const AccountsComponent = () => {
+    const finalApprovedExpenses = expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true);
+    const pendingPaymentExpenses = finalApprovedExpenses.filter(exp => (Number(exp.paid) || 0) < (exp.total || 0));
+    const fullyPaidExpenses = finalApprovedExpenses.filter(exp => (Number(exp.paid) || 0) >= (exp.total || 0));
+    
+    return (
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold" style={{ color: 'var(--primary)' }}>Accounts & Payments</h3>
+        
+        {/* Pending Payments Section */}
+        <div className="p-6 rounded-lg" style={{ background: 'var(--accent-light)' }}>
+          <p className="text-center text-lg mb-6" style={{ color: 'var(--foreground)' }}>
+            💰 Final approved expenses ready for payment processing
+          </p>
+          
+          {finalApprovedExpenses.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-lg text-gray-500">💰 No expenses in accounts yet!</p>
+              <p className="text-sm text-gray-400 mt-2">Expenses will appear here after final approval confirmation.</p>
+            </div>
+          ) : pendingPaymentExpenses.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-lg text-gray-500">✅ All approved expenses have been paid!</p>
+              <p className="text-sm text-gray-400 mt-2">Check the completed payments table below.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Pending Payment Section */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg" style={{ color: 'var(--primary)' }}>
+                  🔄 Pending Payment ({pendingPaymentExpenses.length})
+                </h4>
+                
+                {pendingPaymentExpenses.length === 0 ? (
+                  <div className="text-center py-8 rounded" style={{ background: 'var(--surface)' }}>
+                    <p className="text-gray-500">✅ All approved expenses have been paid!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingPaymentExpenses.map(exp => (
+                      <div key={exp.id} className="p-4 rounded-lg shadow-sm" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h5 className="font-semibold" style={{ color: 'var(--primary)' }}>{exp.user?.name || 'Unknown'}</h5>
+                              <p className="text-sm text-gray-500">{exp.user?.department || 'No Department'}</p>
+                              <p className="text-xs text-gray-400">{exp.user?.email}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-lg" style={{ color: 'var(--primary)' }}>₹{formatAmount(exp.total)}</div>
+                              <div className="text-xs text-gray-500">{exp.date}</div>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>Purpose:</strong> {exp.purpose || 'Not specified'}</div>
+                            <div><strong>Category:</strong> {exp.category || 'Not specified'}</div>
+                          </div>
+                          
+                          {/* Payment Status */}
+                          <div className="p-3 rounded" style={{ background: 'var(--accent-light)' }}>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <div className="text-xs text-gray-500">Total</div>
+                                <div className="font-semibold">₹{formatAmount(exp.total)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Paid</div>
+                                <div className="font-semibold" style={{ color: '#22c55e' }}>₹{formatAmount(exp.paid)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">Balance</div>
+                                <div className="font-semibold" style={{ color: '#ef4444' }}>
+                                  ₹{formatAmount((exp.total || 0) - (Number(exp.paid) || 0))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Final Approval Info */}
+                          {exp.finalApprovedBy && (
+                            <div className="text-xs p-2 rounded" style={{ background: '#22c55e', color: '#ffffff' }}>
+                              <div className="font-semibold">✅ ACCOUNTS APPROVED</div>
+                              <div className="opacity-90">by {exp.finalApprovedBy.name} on {exp.finalApprovedBy.timestamp}</div>
+                            </div>
+                          )}
+                          
+                          {/* Payment Actions */}
+                          {!exp.locked && (
+                            <div className="flex gap-2 w-full">
+                              <Input
+                              type="number"
+                              value={paidDraft[exp.id] !== undefined ? paidDraft[exp.id] : (exp.paid || '')}
+                              onChange={e => handlePaidDraftChange(exp.id, e.target.value)}
+                              placeholder="Payment amount"
+                              className="flex-1 min-w-[120px] px-4 py-2"
+                              min="0"
+                              max={exp.total}
+                              style={{ width: '100%' }}
+                              />
+                              <Button 
+                              onClick={() => handlePaidSave(exp.id, exp.total)} 
+                              className="px-6"
+                              style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+                              >
+                              💳 Pay
+                              </Button>
+                            </div>
+                          )}
+                          
+                          {/* Quick Actions */}
+                          <div className="flex gap-2">
+                            <Button 
+                              onClick={() => handlePreview(exp)} 
+                              className="flex-1 text-sm"
+                              style={{ background: 'var(--accent)', color: 'var(--surface)' }}
+                            >
+                              👁️ View Details
+                            </Button>
+                            {!exp.locked && (
+                              <Button 
+                                onClick={() => handleCloseExpense(exp.id)} 
+                                className="px-4 text-sm"
+                                style={{ background: '#6b7280', color: 'var(--surface)' }}
+                              >
+                                🔐 Close
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Completed Payments & Summary Section */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg" style={{ color: 'var(--primary)' }}>
+                  📊 Payment Summary & Completed
+                </h4>
+                
+                {/* Summary Statistics */}
+                <div className="p-4 rounded-lg shadow-sm" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
+                  <h5 className="font-semibold mb-3" style={{ color: 'var(--primary)' }}>Financial Overview</h5>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span>Total in Accounts:</span>
+                      <span className="font-bold">₹{formatAmount(finalApprovedExpenses.reduce((sum, e) => sum + (e.total || 0), 0))}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Paid:</span>
+                      <span className="font-bold" style={{ color: '#22c55e' }}>₹{formatAmount(finalApprovedExpenses.reduce((sum, e) => sum + (Number(e.paid) || 0), 0))}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2" style={{ borderColor: 'var(--muted)' }}>
+                      <span>Outstanding Balance:</span>
+                      <span className="font-bold" style={{ color: '#ef4444' }}>
+                        ₹{formatAmount(finalApprovedExpenses.reduce((sum, e) => sum + (e.total || 0), 0) - finalApprovedExpenses.reduce((sum, e) => sum + (Number(e.paid) || 0), 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Pending Items:</span>
+                      <span className="font-bold">{pendingPaymentExpenses.length} expenses</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Completed Items:</span>
+                      <span className="font-bold" style={{ color: '#22c55e' }}>{fullyPaidExpenses.length} expenses</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Completed Payments Table - Outside the main payment processing box */}
+        {fullyPaidExpenses.length > 0 && (
+          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
+            <h4 className="font-semibold text-xl mb-4" style={{ color: '#22c55e' }}>
+              ✅ Completed Payments ({fullyPaidExpenses.length})
+            </h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--muted)' }}>
+                    <th className="text-left p-3 font-semibold" style={{ color: 'var(--primary)' }}>Employee</th>
+                    <th className="text-left p-3 font-semibold" style={{ color: 'var(--primary)' }}>Date</th>
+                    <th className="text-left p-3 font-semibold" style={{ color: 'var(--primary)' }}>Purpose</th>
+                    <th className="text-right p-3 font-semibold" style={{ color: 'var(--primary)' }}>Total</th>
+                    <th className="text-right p-3 font-semibold" style={{ color: 'var(--primary)' }}>Paid</th>
+                    <th className="text-center p-3 font-semibold" style={{ color: 'var(--primary)' }}>Payment Date</th>
+                    <th className="text-center p-3 font-semibold" style={{ color: 'var(--primary)' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fullyPaidExpenses.map((exp, idx) => (
+                    <tr key={exp.id} style={{ 
+                      borderBottom: '1px solid var(--muted)',
+                      background: idx % 2 === 0 ? 'var(--surface)' : 'var(--accent-light)'
+                    }}>
+                      <td className="p-3">
+                        <div>
+                          <div className="font-semibold" style={{ color: 'var(--primary)' }}>{exp.user?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{exp.user?.department}</div>
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm">{exp.date}</td>
+                      <td className="p-3 text-sm">{exp.purpose || 'Not specified'}</td>
+                      <td className="p-3 text-right font-semibold">₹{formatAmount(exp.total)}</td>
+                      <td className="p-3 text-right font-semibold" style={{ color: '#22c55e' }}>₹{formatAmount(exp.paid)}</td>
+                      <td className="p-3 text-center text-sm">
+                        {exp.paidDate ? (
+                          <span className="text-sm">{exp.paidDate}</span>
+                        ) : (
+                          <span className="text-xs text-gray-500">Not recorded</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        <Button 
+                          onClick={() => handlePreview(exp)} 
+                          className="text-xs px-3 py-1"
+                          style={{ background: 'var(--accent)', color: 'var(--surface)' }}
+                        >
+                          👁️ View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Main Dashboard Component (existing content)
+  const DashboardComponent = () => (
+    <>
+      {/* Primary Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* Total Month Spend */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #3b82f6' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Total Spend This Month</h3>
+          <p className="text-3xl font-bold mb-1" style={{ color: '#3b82f6' }}>₹{formatAmount(totalMonthSpend)}</p>
+          <p className="text-xs text-gray-400">Monthly expenditure</p>
+        </div>
+        
+        {/* Total Employees */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #10b981' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Active Employees</h3>
+          <p className="text-3xl font-bold mb-1" style={{ color: '#10b981' }}>{totalEmployees}</p>
+          <p className="text-xs text-gray-400">Submitted expenses</p>
+        </div>
+        
+        {/* Max Spending Category */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #f59e0b' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Highest Spending</h3>
+          <p className="text-lg font-semibold mb-1" style={{ color: '#f59e0b' }}>{maxCategory[0]}</p>
+          <p className="text-sm text-gray-500">₹{formatAmount(maxCategory[1])}</p>
+        </div>
+        
+        {/* Min Spending Category */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #8b5cf6' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Lowest Spending</h3>
+          <p className="text-lg font-semibold mb-1" style={{ color: '#8b5cf6' }}>{minCategory[0]}</p>
+          <p className="text-sm text-gray-500">₹{formatAmount(minCategory[1])}</p>
+        </div>
+      </div>
+
+      {/* Status Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* Approved Expenses */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #22c55e' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Approved Expenses</h3>
+          <p className="text-3xl font-bold mb-1" style={{ color: '#22c55e' }}>{totalApproved}</p>
+          <p className="text-xs text-gray-400">Ready for payment</p>
+        </div>
+        
+        {/* Under Review */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #eab308' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Under Review</h3>
+          <p className="text-3xl font-bold mb-1" style={{ color: '#eab308' }}>{totalUnderReview}</p>
+          <p className="text-xs text-gray-400">Pending approval</p>
+        </div>
+        
+        {/* Rejected Expenses */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #ef4444' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Rejected Expenses</h3>
+          <p className="text-3xl font-bold mb-1" style={{ color: '#ef4444' }}>{totalRejected}</p>
+          <p className="text-xs text-gray-400">Need revision</p>
+        </div>
+        
+        {/* Closed Expenses */}
+        <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #6b7280' }}>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Closed Expenses</h3>
+          <p className="text-3xl font-bold mb-1" style={{ color: '#6b7280' }}>{totalClosed}</p>
+          <p className="text-xs text-gray-400">Completed transactions</p>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="max-w-full mx-auto p-6 space-y-8">
       <Card className="p-8">
@@ -414,70 +1209,84 @@ export default function AdminDashboard() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--primary)' }}>Admin Dashboard Overview</h2>
         
-        {/* Primary Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          {/* Total Month Spend */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #3b82f6' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Total Spend This Month</h3>
-            <p className="text-3xl font-bold mb-1" style={{ color: '#3b82f6' }}>₹{totalMonthSpend.toLocaleString()}</p>
-            <p className="text-xs text-gray-400">Monthly expenditure</p>
-          </div>
-          
-          {/* Total Employees */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #10b981' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Active Employees</h3>
-            <p className="text-3xl font-bold mb-1" style={{ color: '#10b981' }}>{totalEmployees}</p>
-            <p className="text-xs text-gray-400">Submitted expenses</p>
-          </div>
-          
-          {/* Max Spending Category */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #f59e0b' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Highest Spending</h3>
-            <p className="text-lg font-semibold mb-1" style={{ color: '#f59e0b' }}>{maxCategory[0]}</p>
-            <p className="text-sm text-gray-500">₹{maxCategory[1].toLocaleString()}</p>
-          </div>
-          
-          {/* Min Spending Category */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #8b5cf6' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Lowest Spending</h3>
-            <p className="text-lg font-semibold mb-1" style={{ color: '#8b5cf6' }}>{minCategory[0]}</p>
-            <p className="text-sm text-gray-500">₹{minCategory[1].toLocaleString()}</p>
-          </div>
+        {/* Navigation Buttons */}
+        <div className="flex gap-4 mb-6">
+          <Button 
+            onClick={() => setActiveView('dashboard')} 
+            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg"
+            style={{ 
+              background: activeView === 'dashboard' ? 'var(--primary)' : 'var(--surface)', 
+              color: activeView === 'dashboard' ? 'var(--surface)' : 'var(--foreground)',
+              border: activeView === 'dashboard' ? 'none' : '2px solid var(--primary)'
+            }}
+          >
+            🏠 Dashboard
+          </Button>
+          <Button 
+            onClick={() => setActiveView('review')} 
+            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
+            style={{ 
+              background: activeView === 'review' ? 'var(--primary)' : 'var(--surface)', 
+              color: activeView === 'review' ? 'var(--surface)' : 'var(--foreground)',
+              border: activeView === 'review' ? 'none' : '2px solid var(--primary)'
+            }}
+          >
+            📋 Review
+            {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length > 0 && (
+              <span 
+                className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
+              >
+                {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length}
+              </span>
+            )}
+          </Button>
+          <Button 
+            onClick={() => setActiveView('approve')} 
+            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
+            style={{ 
+              background: activeView === 'approve' ? 'var(--primary)' : 'var(--surface)', 
+              color: activeView === 'approve' ? 'var(--surface)' : 'var(--foreground)',
+              border: activeView === 'approve' ? 'none' : '2px solid var(--primary)'
+            }}
+          >
+            ✅ Approve
+            {expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval).length > 0 && (
+              <span 
+                className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
+              >
+                {expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval).length}
+              </span>
+            )}
+          </Button>
+          <Button 
+            onClick={() => setActiveView('accounts')} 
+            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
+            style={{ 
+              background: activeView === 'accounts' ? 'var(--primary)' : 'var(--surface)', 
+              color: activeView === 'accounts' ? 'var(--surface)' : 'var(--foreground)',
+              border: activeView === 'accounts' ? 'none' : '2px solid var(--primary)'
+            }}
+          >
+            💰 Accounts
+            {expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true).length > 0 && (
+              <span 
+                className="absolute -top-2 -right-2 bg-green-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
+              >
+                {expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true).length}
+              </span>
+            )}
+          </Button>
         </div>
-
-        {/* Status Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          {/* Approved Expenses */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #22c55e' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Approved Expenses</h3>
-            <p className="text-3xl font-bold mb-1" style={{ color: '#22c55e' }}>{totalApproved}</p>
-            <p className="text-xs text-gray-400">Ready for payment</p>
-          </div>
-          
-          {/* Under Review */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #eab308' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Under Review</h3>
-            <p className="text-3xl font-bold mb-1" style={{ color: '#eab308' }}>{totalUnderReview}</p>
-            <p className="text-xs text-gray-400">Pending approval</p>
-          </div>
-          
-          {/* Rejected Expenses */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #ef4444' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Rejected Expenses</h3>
-            <p className="text-3xl font-bold mb-1" style={{ color: '#ef4444' }}>{totalRejected}</p>
-            <p className="text-xs text-gray-400">Need revision</p>
-          </div>
-          
-          {/* Closed Expenses */}
-          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', borderLeft: '6px solid #6b7280' }}>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Closed Expenses</h3>
-            <p className="text-3xl font-bold mb-1" style={{ color: '#6b7280' }}>{totalClosed}</p>
-            <p className="text-xs text-gray-400">Completed transactions</p>
-          </div>
-        </div>
+        
+        {/* Conditional Content Based on Active View */}
+        {activeView === 'dashboard' && <DashboardComponent />}
+        {activeView === 'review' && <ReviewComponent />}
+        {activeView === 'approve' && <ApproveComponent />}
+        {activeView === 'accounts' && <AccountsComponent />}
       </div>
 
-      {/* Filters Section */}
+      {/* Filters Section - Only show on dashboard */}
+      {activeView === 'dashboard' && (
       <div className="mb-8 p-6 rounded-lg shadow-md" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold" style={{ color: 'var(--primary)' }}>Filters & Actions</h3>
@@ -553,13 +1362,26 @@ export default function AdminDashboard() {
             <Button onClick={fetchExpenses} className="min-h-[42px]">Refresh Data</Button>
           </div>
           <div className="flex flex-col">
+            <label className="text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>Actions</label>
+            {/* <div className="space-y-2">
+              <Button onClick={fetchExpenses} className="min-h-[42px]">Refresh Data</Button>
+              <Button 
+                onClick={() => setShowClearConfirm(true)} 
+                style={{ background: '#ef4444', color: '#ffffff' }} 
+                className="min-h-[42px]"
+              >
+                🗑️ Clear All Expenses
+              </Button>
+            </div> */}
+          </div>
+          <div className="flex flex-col">
             <label className="text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>Export</label>
             <Button onClick={handleDownloadMasterExcel} style={{ background: 'var(--accent)', color: 'var(--surface)' }} className="min-h-[42px]">Download Excel</Button>
           </div>
         </div>
       </div>
 
-      {/* Expenses Table */}
+          )}{/* Expenses Table */}
       <div className="shadow-lg rounded-lg overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
@@ -636,11 +1458,11 @@ export default function AdminDashboard() {
                         {/* Amount */}
                         <td className="px-6 py-4 border-b text-right" style={{ borderColor: 'var(--muted)' }}>
                           <div className="space-y-2">
-                            <div className="font-bold text-lg" style={{ color: 'var(--primary)' }}>₹{exp.total?.toLocaleString()}</div>
+                            <div className="font-bold text-lg" style={{ color: 'var(--primary)' }}>₹{formatAmount(exp.total)}</div>
                             <div className="text-xs space-y-1">
-                              <div>Paid: ₹{(Number(exp.paid) || 0).toLocaleString()}</div>
+                              <div>Paid: ₹{formatAmount(exp.paid)}</div>
                               <div className="font-medium" style={{ color: (exp.total || 0) - (Number(exp.paid) || 0) > 0 ? '#ef4444' : '#22c55e' }}>
-                                Balance: ₹{((exp.total || 0) - (Number(exp.paid) || 0)).toLocaleString()}
+                                Balance: ₹{formatAmount((exp.total || 0) - (Number(exp.paid) || 0))}
                               </div>
                             </div>
                           </div>
@@ -827,9 +1649,9 @@ export default function AdminDashboard() {
                         {/* Amount */}
                         <td className="px-4 py-3 border-b text-right" style={{ borderColor: 'var(--muted)' }}>
                           <div className="space-y-1">
-                            <div className="font-bold" style={{ color: 'var(--primary)' }}>₹{exp.total?.toLocaleString()}</div>
+                            <div className="font-bold" style={{ color: 'var(--primary)' }}>₹{formatAmount(exp.total)}</div>
                             <div className="text-xs" style={{ color: (exp.total || 0) - (Number(exp.paid) || 0) > 0 ? '#ef4444' : '#22c55e' }}>
-                              Bal: ₹{((exp.total || 0) - (Number(exp.paid) || 0)).toLocaleString()}
+                              Bal: ₹{formatAmount((exp.total || 0) - (Number(exp.paid) || 0))}
                             </div>
                           </div>
                         </td>
@@ -894,6 +1716,7 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+   
       {/* Preview Modal */}
       {isPreviewOpen && previewExpense && (
         <Dialog open={isPreviewOpen} onClose={closePreview} className="fixed z-50 inset-0 flex items-center justify-center">
@@ -934,11 +1757,11 @@ export default function AdminDashboard() {
                 {/* Payment Information */}
                 <h3 className="text-lg font-semibold" style={{ color: 'var(--primary)' }}>Payment Information</h3>
                 <div className="space-y-2 p-4 rounded" style={{ background: 'var(--accent-light)' }}>
-                  <div><b style={{ color: 'var(--primary)' }}>Total Amount:</b> <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>₹{previewExpense.total?.toLocaleString()}</span></div>
-                  <div><b style={{ color: 'var(--primary)' }}>Amount Paid:</b> <span style={{ color: '#22c55e' }}>₹{(Number(previewExpense.paid) || 0).toLocaleString()}</span></div>
+                  <div><b style={{ color: 'var(--primary)' }}>Total Amount:</b> <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>₹{formatAmount(previewExpense.total)}</span></div>
+                  <div><b style={{ color: 'var(--primary)' }}>Amount Paid:</b> <span style={{ color: '#22c55e' }}>₹{formatAmount(previewExpense.paid)}</span></div>
                   <div><b style={{ color: 'var(--primary)' }}>Balance:</b> 
                     <span style={{ color: (previewExpense.total || 0) - (Number(previewExpense.paid) || 0) > 0 ? '#ef4444' : '#22c55e' }}>
-                      ₹{((previewExpense.total || 0) - (Number(previewExpense.paid) || 0)).toLocaleString()}
+                      ₹{formatAmount((previewExpense.total || 0) - (Number(previewExpense.paid) || 0))}
                     </span>
                   </div>
                   {previewExpense.paidDate && (
@@ -985,40 +1808,43 @@ export default function AdminDashboard() {
                   <div><b style={{ color: 'var(--primary)' }}>Category:</b> <span style={{ color: 'var(--foreground)' }}>{previewExpense.category || 'Not specified'}</span></div>
                   {previewExpense.category === 'personal' && (
                     <>
-                      {previewExpense.food && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.food).toLocaleString()}</span></div>}
-                      {previewExpense.fuel && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.fuel).toLocaleString()}</span></div>}
-                      {previewExpense.entertainment && <div><b style={{ color: 'var(--primary)' }}>Entertainment:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.entertainment).toLocaleString()}</span></div>}
-                      {previewExpense.utility && <div><b style={{ color: 'var(--primary)' }}>Utility:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.utility).toLocaleString()}</span></div>}
-                      {previewExpense.home && <div><b style={{ color: 'var(--primary)' }}>Home:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.home).toLocaleString()}</span></div>}
-                      {previewExpense.travel && <div><b style={{ color: 'var(--primary)' }}>Travel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.travel).toLocaleString()}</span></div>}
-                      {previewExpense.grocery && <div><b style={{ color: 'var(--primary)' }}>Grocery:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.grocery).toLocaleString()}</span></div>}
+                      {previewExpense.food && previewExpense.food.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.food.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.fuel && previewExpense.fuel.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.fuel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.entertainment && previewExpense.entertainment.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Entertainment:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.entertainment.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.utility && previewExpense.utility.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Utility:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.utility.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.home && previewExpense.home.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Home:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.home.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.travel && previewExpense.travel.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Travel:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.travel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.grocery && previewExpense.grocery.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Grocery:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.grocery.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.miscellaneous && previewExpense.miscellaneous.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Miscellaneous:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
                     </>
                   )}
                   {previewExpense.category === 'official' && (
                     <>
-                      {previewExpense.food && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.food).toLocaleString()}</span></div>}
-                      {previewExpense.fuel && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.fuel).toLocaleString()}</span></div>}
-                      {previewExpense.transport && <div><b style={{ color: 'var(--primary)' }}>Transport:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.transport).toLocaleString()}</span></div>}
-                      {previewExpense.hotel && <div><b style={{ color: 'var(--primary)' }}>Hotel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.hotel).toLocaleString()}</span></div>}
+                      {previewExpense.food && previewExpense.food.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Food:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.food.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.fuel && previewExpense.fuel.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Fuel:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.fuel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.transport && previewExpense.transport.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Transport:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.transport.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.hotel && previewExpense.hotel.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Hotel:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.hotel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.miscellaneous && previewExpense.miscellaneous.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Miscellaneous:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
                     </>
                   )}
                   {previewExpense.category === 'site' && (
                     <>
                       {previewExpense.siteName && <div><b style={{ color: 'var(--primary)' }}>Site Name:</b> <span style={{ color: 'var(--foreground)' }}>{previewExpense.siteName}</span></div>}
-                      {previewExpense.labour && <div><b style={{ color: 'var(--primary)' }}>Labour:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.labour).toLocaleString()}</span></div>}
-                      {previewExpense.travel && <div><b style={{ color: 'var(--primary)' }}>Travel:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.travel).toLocaleString()}</span></div>}
-                      {previewExpense.tools && <div><b style={{ color: 'var(--primary)' }}>Tools:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.tools).toLocaleString()}</span></div>}
-                      {previewExpense.consumables && <div><b style={{ color: 'var(--primary)' }}>Consumables:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.consumables).toLocaleString()}</span></div>}
-                      {previewExpense.stay && <div><b style={{ color: 'var(--primary)' }}>Stay:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.stay).toLocaleString()}</span></div>}
-                      {previewExpense.transportOfMaterial && <div><b style={{ color: 'var(--primary)' }}>Transport of Material:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.transportOfMaterial).toLocaleString()}</span></div>}
-                      {previewExpense.localCommute && <div><b style={{ color: 'var(--primary)' }}>Local Commute:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(previewExpense.localCommute).toLocaleString()}</span></div>}
+                      {previewExpense.labour && previewExpense.labour.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Labour:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.labour.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.travel && previewExpense.travel.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Travel:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.travel.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.tools && previewExpense.tools.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Tools:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.tools.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.consumables && previewExpense.consumables.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Consumables:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.consumables.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.stay && previewExpense.stay.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Stay:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.stay.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.transportOfMaterial && previewExpense.transportOfMaterial.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Transport of Material:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.transportOfMaterial.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.localCommute && previewExpense.localCommute.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Local Commute:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.localCommute.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
+                      {previewExpense.miscellaneous && previewExpense.miscellaneous.length > 0 && <div><b style={{ color: 'var(--primary)' }}>Miscellaneous:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(previewExpense.miscellaneous.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0))}</span></div>}
                     </>
                   )}
                   {(!previewExpense.category || previewExpense.category === '') && previewExpense.others && previewExpense.others.length > 0 && (
                     <>
                       {previewExpense.others.map((other: any, idx: number) => (
                         <div key={idx}>
-                          <b style={{ color: 'var(--primary)' }}>{other.label || `Other ${idx + 1}`}:</b> <span style={{ color: 'var(--foreground)' }}>₹{Number(other.amount).toLocaleString()}</span>
+                          <b style={{ color: 'var(--primary)' }}>{other.label || `Other ${idx + 1}`}:</b> <span style={{ color: 'var(--foreground)' }}>₹{formatAmount(other.amount)}</span>
                         </div>
                       ))}
                     </>
