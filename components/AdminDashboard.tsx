@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, updateDoc, doc, query, where, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, where, orderBy, deleteDoc, addDoc } from 'firebase/firestore';
 import { Card, Input, Button } from "./ui/shadcn";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -38,7 +38,47 @@ export default function AdminDashboard() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isExpandedView, setIsExpandedView] = useState(true);
   const [showEmailTest, setShowEmailTest] = useState(false);
-  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'review', 'approve', 'accounts'
+  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'review', 'approve', 'accounts', 'access-control'
+  const [accessControlUsers, setAccessControlUsers] = useState<any[]>([]);
+
+  // Fetch access control users from Firebase
+  const fetchAccessControlUsers = async () => {
+    try {
+      const q = query(collection(db, 'accessControl'));
+      const snapshot = await getDocs(q);
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      setAccessControlUsers(users);
+    } catch (err: any) {
+      console.error('Error fetching access control users:', err);
+    }
+  };
+
+  // Check if a user has admin access based on email
+  const hasAdminAccess = (email: string): boolean => {
+    // First check if user is in ADMIN_EMAILS
+    if (ADMIN_EMAILS.includes(email)) {
+      return true;
+    }
+    
+    // Then check if user has admin access in access control
+    const accessControlUser = accessControlUsers.find(u => u.email === email);
+    return accessControlUser?.accessRights === 'admin';
+  };
+
+  // Check if a user has specific area access
+  const hasAreaAccess = (email: string, area: 'review' | 'approve' | 'accounts'): boolean => {
+    // ADMIN_EMAILS have full access
+    if (ADMIN_EMAILS.includes(email)) {
+      return true;
+    }
+    
+    const accessControlUser = accessControlUsers.find(u => u.email === email);
+    if (!accessControlUser) return false;
+    
+    // For both admin and entry users, check specific area permissions
+    // Admin users will only see sections they have checkboxes selected for
+    return accessControlUser.areaOfRights?.[area] === true;
+  };
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -89,6 +129,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchExpenses();
+    fetchAccessControlUsers();
     // eslint-disable-next-line
   }, [filterMonth, filterDept, filterEmployee, filterSite]);
 
@@ -1135,6 +1176,527 @@ export default function AdminDashboard() {
     );
   };
 
+  // Component for Access Control
+  const AccessControlComponent = () => {
+    const [showAddForm, setShowAddForm] = React.useState(false);
+    const [newUser, setNewUser] = React.useState({
+      name: '',
+      email: '',
+      number: '',
+      designation: '',
+      department: '',
+      employeeManager: '',
+      accessRights: 'entry',
+      areaOfRights: {
+        review: false,
+        approve: false,
+        accounts: false
+      }
+    });
+
+    const handleAccessRightsChange = (userId: string, accessRight: string) => {
+      setAccessControlUsers(prev => 
+        prev.map(user => 
+          user.id === userId ? { ...user, accessRights: accessRight } : user
+        )
+      );
+    };
+
+    const handleAreaRightsChange = (userId: string, area: string, checked: boolean) => {
+      setAccessControlUsers(prev => 
+        prev.map(user => 
+          user.id === userId 
+            ? { ...user, areaOfRights: { ...user.areaOfRights, [area]: checked } } 
+            : user
+        )
+      );
+    };
+
+    const handleAddUser = async () => {
+      if (!newUser.name || !newUser.email) {
+        alert('Please fill in at least Name and Email fields');
+        return;
+      }
+
+      try {
+        // Check if user email already exists
+        const existingUser = accessControlUsers.find(u => u.email === newUser.email);
+        if (existingUser) {
+          alert('A user with this email already exists in access control!');
+          return;
+        }
+
+        // Add to Firebase
+        const docRef = await addDoc(collection(db, 'accessControl'), {
+          ...newUser,
+          createdAt: new Date().toISOString(),
+          createdBy: user?.email || 'Unknown'
+        });
+
+        const userToAdd = {
+          ...newUser,
+          id: docRef.id
+        };
+
+        setAccessControlUsers(prev => [...prev, userToAdd]);
+        
+        // Reset form
+        setNewUser({
+          name: '',
+          email: '',
+          number: '',
+          designation: '',
+          department: '',
+          employeeManager: '',
+          accessRights: 'entry',
+          areaOfRights: {
+            review: false,
+            approve: false,
+            accounts: false
+          }
+        });
+        setShowAddForm(false);
+        
+        alert('User added successfully!');
+      } catch (error) {
+        console.error('Error adding user:', error);
+        alert('Failed to add user. Please try again.');
+      }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+      if (confirm('Are you sure you want to remove this user from access control?')) {
+        try {
+          await deleteDoc(doc(db, 'accessControl', userId));
+          setAccessControlUsers(prev => prev.filter(user => user.id !== userId));
+          alert('User removed successfully!');
+        } catch (error) {
+          console.error('Error deleting user:', error);
+          alert('Failed to remove user. Please try again.');
+        }
+      }
+    };
+
+    const handleUpdateAccessRights = async (userId: string, accessRight: string) => {
+      try {
+        await updateDoc(doc(db, 'accessControl', userId), { accessRights: accessRight });
+        handleAccessRightsChange(userId, accessRight);
+      } catch (error) {
+        console.error('Error updating access rights:', error);
+        alert('Failed to update access rights.');
+      }
+    };
+
+    const handleUpdateAreaRights = async (userId: string, area: string, checked: boolean) => {
+      try {
+        const user = accessControlUsers.find(u => u.id === userId);
+        if (user) {
+          const updatedAreaRights = { ...user.areaOfRights, [area]: checked };
+          await updateDoc(doc(db, 'accessControl', userId), { areaOfRights: updatedAreaRights });
+          handleAreaRightsChange(userId, area, checked);
+        }
+      } catch (error) {
+        console.error('Error updating area rights:', error);
+        alert('Failed to update area rights.');
+      }
+    };
+
+    // Initialize with some sample data if empty
+    React.useEffect(() => {
+      if (accessControlUsers.length === 0) {
+        setAccessControlUsers([
+          {
+            id: '1',
+            name: 'John Doe',
+            email: 'john.doe@example.com',
+            number: '+91 9876543210',
+            designation: 'Manager',
+            department: 'Sales',
+            employeeManager: 'Jane Smith',
+            accessRights: 'admin',
+            areaOfRights: {
+              review: true,
+              approve: true,
+              accounts: true
+            }
+          },
+          {
+            id: '2',
+            name: 'Sarah Johnson',
+            email: 'sarah.johnson@example.com',
+            number: '+91 9876543211',
+            designation: 'Accountant',
+            department: 'Accounts',
+            employeeManager: 'John Doe',
+            accessRights: 'entry',
+            areaOfRights: {
+              review: false,
+              approve: false,
+              accounts: true
+            }
+          }
+        ]);
+      }
+    }, []);
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-semibold" style={{ color: 'var(--primary)' }}>Access Control Management</h3>
+          <Button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="px-6 py-2 font-semibold"
+            style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+          >
+            {showAddForm ? '✕ Cancel' : '➕ Add New User'}
+          </Button>
+        </div>
+
+        {/* Add New User Form */}
+        {showAddForm && (
+          <div className="p-6 rounded-lg shadow-lg" style={{ background: 'var(--surface)', border: '2px solid var(--primary)' }}>
+            <h4 className="text-lg font-semibold mb-4" style={{ color: 'var(--primary)' }}>Add New User</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  placeholder="Enter full name"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Email ID <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="email@example.com"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                />
+              </div>
+
+              {/* Number */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Phone Number
+                </label>
+                <Input
+                  type="text"
+                  value={newUser.number}
+                  onChange={(e) => setNewUser({ ...newUser, number: e.target.value })}
+                  placeholder="+91 9876543210"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                />
+              </div>
+
+              {/* Designation */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Designation
+                </label>
+                <Input
+                  type="text"
+                  value={newUser.designation}
+                  onChange={(e) => setNewUser({ ...newUser, designation: e.target.value })}
+                  placeholder="e.g., Manager, Accountant"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                />
+              </div>
+
+              {/* Department */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Department
+                </label>
+                <select
+                  value={newUser.department}
+                  onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                  className="w-full px-3 py-2 border rounded"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                >
+                  <option value="">Select Department</option>
+                  <option value="sales">Sales</option>
+                  <option value="hr">HR</option>
+                  <option value="marketing">Marketing</option>
+                  <option value="admin">Admin</option>
+                  <option value="site execution">Site Execution</option>
+                  <option value="IT">IT</option>
+                  <option value="accounts">Accounts</option>
+                  <option value="production">Production</option>
+                </select>
+              </div>
+
+              {/* Employee Manager */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Employee Manager
+                </label>
+                <Input
+                  type="text"
+                  value={newUser.employeeManager}
+                  onChange={(e) => setNewUser({ ...newUser, employeeManager: e.target.value })}
+                  placeholder="Manager's name"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                />
+              </div>
+
+              {/* Access Rights */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Access Rights
+                </label>
+                <select
+                  value={newUser.accessRights}
+                  onChange={(e) => setNewUser({ ...newUser, accessRights: e.target.value })}
+                  className="w-full px-3 py-2 border rounded"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', borderColor: 'var(--muted)' }}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="entry">Entry</option>
+                </select>
+              </div>
+
+              {/* Area of Rights - Only shown when access is admin */}
+              {newUser.accessRights === 'admin' && (
+                <div className="md:col-span-2 lg:col-span-3">
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                    Area of Rights
+                  </label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUser.areaOfRights.review}
+                        onChange={(e) => setNewUser({
+                          ...newUser,
+                          areaOfRights: { ...newUser.areaOfRights, review: e.target.checked }
+                        })}
+                        className="w-4 h-4"
+                      />
+                      <span>Review</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUser.areaOfRights.approve}
+                        onChange={(e) => setNewUser({
+                          ...newUser,
+                          areaOfRights: { ...newUser.areaOfRights, approve: e.target.checked }
+                        })}
+                        className="w-4 h-4"
+                      />
+                      <span>Approve</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUser.areaOfRights.accounts}
+                        onChange={(e) => setNewUser({
+                          ...newUser,
+                          areaOfRights: { ...newUser.areaOfRights, accounts: e.target.checked }
+                        })}
+                        className="w-4 h-4"
+                      />
+                      <span>Accounts</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 mt-6">
+              <Button
+                onClick={() => setShowAddForm(false)}
+                style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddUser}
+                style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+              >
+                ➕ Add User
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="p-6 rounded-lg" style={{ background: 'var(--accent-light)' }}>
+          <div className="mb-6">
+            <p className="text-center text-lg mb-4" style={{ color: 'var(--foreground)' }}>
+              🔐 Manage user access rights and permissions for different areas of the application
+            </p>
+            
+            {/* Access Level Explanation */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="p-4 rounded-lg" style={{ background: 'var(--surface)', border: '2px solid #22c55e' }}>
+                <h5 className="font-semibold mb-2" style={{ color: '#22c55e' }}>👑 Admin Access</h5>
+                <p className="text-sm" style={{ color: 'var(--foreground)' }}>
+                  Full access to the Admin Dashboard including all sections (Dashboard, Review, Approve, Accounts, and Access Control). 
+                  Can manage expenses, approve/reject submissions, process payments, and configure user permissions.
+                </p>
+                <p className="text-xs mt-2 italic" style={{ color: 'var(--muted-foreground)' }}>
+                  Same permissions as ADMIN_EMAILS list
+                </p>
+              </div>
+              
+              <div className="p-4 rounded-lg" style={{ background: 'var(--surface)', border: '2px solid #3b82f6' }}>
+                <h5 className="font-semibold mb-2" style={{ color: '#3b82f6' }}>👤 Entry Access</h5>
+                <p className="text-sm" style={{ color: 'var(--foreground)' }}>
+                  Limited to employee functions only. Can submit expenses, view their own submissions, and track expense status. 
+                  Cannot access admin dashboard or approve/review other users' expenses.
+                </p>
+                <p className="text-xs mt-2 italic" style={{ color: 'var(--muted-foreground)' }}>
+                  Standard employee access (unless specific area rights are granted)
+                </p>
+              </div>
+            </div>
+            
+            {/* Important Note */}
+            <div className="mt-4 p-4 rounded-lg" style={{ background: '#fef3c7', border: '2px solid #f59e0b' }}>
+              <div className="flex gap-3">
+                <span style={{ fontSize: '24px' }}>💡</span>
+                <div>
+                  <h6 className="font-semibold mb-2" style={{ color: '#92400e' }}>Important Notes:</h6>
+                  <ul className="text-sm space-y-1" style={{ color: '#92400e' }}>
+                    <li>• <strong>Default Admins</strong> (marked with ⭐): Users in ADMIN_EMAILS list have permanent admin access and cannot be modified.</li>
+                    <li>• <strong>Custom Admin Users</strong>: Users added here with "Admin" access get the same permissions as default admins.</li>
+                    <li>• <strong>Area Rights</strong>: For "Entry" users, you can grant specific permissions to Review, Approve, or Accounts sections.</li>
+                    <li>• <strong>Security</strong>: Only add trusted users to the Access Control system. Admin users have full control over the application.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr style={{ background: 'var(--surface)', borderBottom: '2px solid var(--muted)' }}>
+                  <th className="p-3 text-left font-semibold" style={{ color: 'var(--primary)' }}>Name</th>
+                  <th className="p-3 text-left font-semibold" style={{ color: 'var(--primary)' }}>Email ID</th>
+                  <th className="p-3 text-left font-semibold" style={{ color: 'var(--primary)' }}>Number</th>
+                  <th className="p-3 text-left font-semibold" style={{ color: 'var(--primary)' }}>Designation</th>
+                  <th className="p-3 text-left font-semibold" style={{ color: 'var(--primary)' }}>Department</th>
+                  <th className="p-3 text-left font-semibold" style={{ color: 'var(--primary)' }}>Employee Manager</th>
+                  <th className="p-3 text-center font-semibold" style={{ color: 'var(--primary)' }}>Access Rights</th>
+                  <th className="p-3 text-center font-semibold" style={{ color: 'var(--primary)' }} colSpan={3}>Area of Rights</th>
+                  <th className="p-3 text-center font-semibold" style={{ color: 'var(--primary)' }}>Actions</th>
+                </tr>
+                <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--muted)' }}>
+                  <th colSpan={7}></th>
+                  <th className="p-2 text-center text-xs font-medium" style={{ color: 'var(--primary)' }}>Review</th>
+                  <th className="p-2 text-center text-xs font-medium" style={{ color: 'var(--primary)' }}>Approve</th>
+                  <th className="p-2 text-center text-xs font-medium" style={{ color: 'var(--primary)' }}>Accounts</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {accessControlUsers.map((user, idx) => (
+                  <tr 
+                    key={user.id}
+                    style={{ 
+                      background: idx % 2 === 0 ? 'var(--surface)' : 'var(--accent-light)',
+                      borderBottom: '1px solid var(--muted)'
+                    }}
+                  >
+                    <td className="p-3" style={{ color: 'var(--foreground)' }}>
+                      <div className="flex items-center gap-2">
+                        {user.name}
+                        {ADMIN_EMAILS.includes(user.email) && (
+                          <span className="text-xs px-2 py-1 rounded" style={{ background: '#f59e0b', color: '#ffffff' }} title="Default Admin User">
+                            ⭐
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3" style={{ color: 'var(--foreground)' }}>{user.email}</td>
+                    <td className="p-3" style={{ color: 'var(--foreground)' }}>{user.number}</td>
+                    <td className="p-3" style={{ color: 'var(--foreground)' }}>{user.designation}</td>
+                    <td className="p-3" style={{ color: 'var(--foreground)' }}>{user.department}</td>
+                    <td className="p-3" style={{ color: 'var(--foreground)' }}>{user.employeeManager}</td>
+                    <td className="p-3 text-center">
+                      <select
+                        value={user.accessRights}
+                        onChange={(e) => handleUpdateAccessRights(user.id, e.target.value)}
+                        className="px-3 py-1 border rounded text-sm font-semibold"
+                        style={{ 
+                          background: user.accessRights === 'admin' ? '#22c55e' : '#3b82f6', 
+                          color: '#ffffff', 
+                          borderColor: 'var(--muted)' 
+                        }}
+                      >
+                        <option value="admin">👑 Admin</option>
+                        <option value="entry">👤 Entry</option>
+                      </select>
+                    </td>
+                    <td className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={user.areaOfRights.review}
+                        onChange={(e) => handleUpdateAreaRights(user.id, 'review', e.target.checked)}
+                        disabled={user.accessRights === 'admin'}
+                        className="w-4 h-4 cursor-pointer disabled:opacity-50"
+                        title={user.accessRights === 'admin' ? 'Admin has access to all areas' : ''}
+                      />
+                    </td>
+                    <td className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={user.areaOfRights.approve}
+                        onChange={(e) => handleUpdateAreaRights(user.id, 'approve', e.target.checked)}
+                        disabled={user.accessRights === 'admin'}
+                        className="w-4 h-4 cursor-pointer disabled:opacity-50"
+                        title={user.accessRights === 'admin' ? 'Admin has access to all areas' : ''}
+                      />
+                    </td>
+                    <td className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={user.areaOfRights.accounts}
+                        onChange={(e) => handleUpdateAreaRights(user.id, 'accounts', e.target.checked)}
+                        disabled={user.accessRights === 'admin'}
+                        className="w-4 h-4 cursor-pointer disabled:opacity-50"
+                        title={user.accessRights === 'admin' ? 'Admin has access to all areas' : ''}
+                      />
+                    </td>
+                    <td className="p-3 text-center">
+                      <Button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="px-3 py-1 text-xs"
+                        style={{ background: '#ef4444', color: '#ffffff' }}
+                      >
+                        🗑️ Remove
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {accessControlUsers.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-lg text-gray-500">👥 No users configured yet!</p>
+              <p className="text-sm text-gray-400 mt-2">Add users to manage their access rights.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Main Dashboard Component (existing content)
   const DashboardComponent = () => (
     <>
@@ -1222,67 +1784,95 @@ export default function AdminDashboard() {
           >
             🏠 Dashboard
           </Button>
-          <Button 
-            onClick={() => setActiveView('review')} 
-            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
-            style={{ 
-              background: activeView === 'review' ? 'var(--primary)' : 'var(--surface)', 
-              color: activeView === 'review' ? 'var(--surface)' : 'var(--foreground)',
-              border: activeView === 'review' ? 'none' : '2px solid var(--primary)'
-            }}
-          >
-            📋 Review
-            {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length > 0 && (
-              <span 
-                className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
-              >
-                {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length}
-              </span>
-            )}
-          </Button>
-          <Button 
-            onClick={() => setActiveView('approve')} 
-            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
-            style={{ 
-              background: activeView === 'approve' ? 'var(--primary)' : 'var(--surface)', 
-              color: activeView === 'approve' ? 'var(--surface)' : 'var(--foreground)',
-              border: activeView === 'approve' ? 'none' : '2px solid var(--primary)'
-            }}
-          >
-            ✅ Approve
-            {expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval).length > 0 && (
-              <span 
-                className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
-              >
-                {expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval).length}
-              </span>
-            )}
-          </Button>
-          <Button 
-            onClick={() => setActiveView('accounts')} 
-            className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
-            style={{ 
-              background: activeView === 'accounts' ? 'var(--primary)' : 'var(--surface)', 
-              color: activeView === 'accounts' ? 'var(--surface)' : 'var(--foreground)',
-              border: activeView === 'accounts' ? 'none' : '2px solid var(--primary)'
-            }}
-          >
-            💰 Accounts
-            {expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true).length > 0 && (
-              <span 
-                className="absolute -top-2 -right-2 bg-green-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
-              >
-                {expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true).length}
-              </span>
-            )}
-          </Button>
+          
+          {/* Show Review button only if user has review access */}
+          {hasAreaAccess(user?.email || '', 'review') && (
+            <Button 
+              onClick={() => setActiveView('review')} 
+              className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
+              style={{ 
+                background: activeView === 'review' ? 'var(--primary)' : 'var(--surface)', 
+                color: activeView === 'review' ? 'var(--surface)' : 'var(--foreground)',
+                border: activeView === 'review' ? 'none' : '2px solid var(--primary)'
+              }}
+            >
+              📋 Review
+              {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length > 0 && (
+                <span 
+                  className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
+                >
+                  {expenses.filter(exp => exp.status === 'Under Review' || !exp.status).length}
+                </span>
+              )}
+            </Button>
+          )}
+          
+          {/* Show Approve button only if user has approve access */}
+          {hasAreaAccess(user?.email || '', 'approve') && (
+            <Button 
+              onClick={() => setActiveView('approve')} 
+              className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
+              style={{ 
+                background: activeView === 'approve' ? 'var(--primary)' : 'var(--surface)', 
+                color: activeView === 'approve' ? 'var(--surface)' : 'var(--foreground)',
+                border: activeView === 'approve' ? 'none' : '2px solid var(--primary)'
+              }}
+            >
+              ✅ Approve
+              {expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval).length > 0 && (
+                <span 
+                  className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
+                >
+                  {expenses.filter(exp => exp.status === 'Approve' && !exp.finalApproval).length}
+                </span>
+              )}
+            </Button>
+          )}
+          
+          {/* Show Accounts button only if user has accounts access */}
+          {hasAreaAccess(user?.email || '', 'accounts') && (
+            <Button 
+              onClick={() => setActiveView('accounts')} 
+              className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg relative"
+              style={{ 
+                background: activeView === 'accounts' ? 'var(--primary)' : 'var(--surface)', 
+                color: activeView === 'accounts' ? 'var(--surface)' : 'var(--foreground)',
+                border: activeView === 'accounts' ? 'none' : '2px solid var(--primary)'
+              }}
+            >
+              💰 Accounts
+              {expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true).length > 0 && (
+                <span 
+                  className="absolute -top-2 -right-2 bg-green-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold"
+                >
+                  {expenses.filter(exp => exp.status === 'Final Approved' || exp.finalApproval === true).length}
+                </span>
+              )}
+            </Button>
+          )}
+          
+          {/* Show Access Control button only if user has admin access */}
+          {hasAdminAccess(user?.email || '') && (
+            <Button 
+              onClick={() => setActiveView('access-control')} 
+              className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg"
+              style={{ 
+                background: activeView === 'access-control' ? 'var(--primary)' : 'var(--surface)', 
+                color: activeView === 'access-control' ? 'var(--surface)' : 'var(--foreground)',
+                border: activeView === 'access-control' ? 'none' : '2px solid var(--primary)'
+              }}
+            >
+              🔐 Access Control
+            </Button>
+          )}
         </div>
         
         {/* Conditional Content Based on Active View */}
         {activeView === 'dashboard' && <DashboardComponent />}
-        {activeView === 'review' && <ReviewComponent />}
-        {activeView === 'approve' && <ApproveComponent />}
-        {activeView === 'accounts' && <AccountsComponent />}
+        {activeView === 'review' && hasAreaAccess(user?.email || '', 'review') && <ReviewComponent />}
+        {activeView === 'approve' && hasAreaAccess(user?.email || '', 'approve') && <ApproveComponent />}
+        {activeView === 'accounts' && hasAreaAccess(user?.email || '', 'accounts') && <AccountsComponent />}
+        {activeView === 'access-control' && hasAdminAccess(user?.email || '') && <AccessControlComponent />}
       </div>
 
       {/* Filters Section - Only show on dashboard */}
