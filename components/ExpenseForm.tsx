@@ -477,6 +477,31 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Basic validation
+    if (!user?.uid) {
+      safeSetState(() => setErrorMessage("User not authenticated. Please log in and try again."));
+      safeSetState(() => setShowErrorModal(true));
+      return;
+    }
+
+    if (!form.category) {
+      safeSetState(() => setErrorMessage("Please select a category before submitting."));
+      safeSetState(() => setShowErrorModal(true));
+      return;
+    }
+
+    if (total <= 0) {
+      safeSetState(() => setErrorMessage("Please enter at least one expense amount."));
+      safeSetState(() => setShowErrorModal(true));
+      return;
+    }
+
+    console.log("Starting expense submission...", { 
+      category: form.category, 
+      total, 
+      userUid: user.uid 
+    });
+
     safeSetState(() => setShowLoadingModal(true));
     safeSetState(() => setError(""));
 
@@ -502,30 +527,86 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         ...form.transportOfMaterial.flatMap((item) => item.files),
         ...form.localCommute.flatMap((item) => item.files),
         ...form.others.flatMap((item) => item.files),
-      ];
+      ].filter(file => file && file.size > 0); // Filter out invalid or empty files
 
-      if (allFiles.length > 0) {
-        for (const proofFile of allFiles) {
-          const filePath = `expenses/${user?.uid}/${Date.now()}_${
-            proofFile.name
-          }`;
-          const { error: uploadError } = await supabase.storage
-            .from("expenses")
-            .upload(filePath, proofFile);
-
-          if (uploadError) throw uploadError;
-
-          const { data } = supabase.storage
-            .from("expenses")
-            .getPublicUrl(filePath);
-          proofUrls.push(data.publicUrl);
+      console.log(`Found ${allFiles.length} files to upload`);
+      
+      // Validate files
+      for (const file of allFiles) {
+        if (file.size > 10 * 1024 * 1024) { // 10MB limit
+          throw new Error(`File ${file.name} is too large. Maximum size is 10MB.`);
+        }
+        
+        const allowedTypes = [
+          'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+          'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'text/plain', 'text/csv'
+        ];
+        
+        if (!allowedTypes.includes(file.type)) {
+          console.warn(`File type not supported: ${file.type} for file: ${file.name}`);
+          // Don't throw error for unsupported types, just log warning
         }
       }
 
+      if (allFiles.length > 0) {
+        console.log(`Uploading ${allFiles.length} files...`);
+        
+        for (const proofFile of allFiles) {
+          if (!proofFile || !proofFile.name) {
+            console.warn('Skipping invalid file:', proofFile);
+            continue;
+          }
+          
+          const sanitizedFileName = proofFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+          const filePath = `expenses/${user?.uid}/${Date.now()}_${sanitizedFileName}`;
+          
+          console.log(`Uploading file: ${proofFile.name} to ${filePath}`);
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("expenses")
+            .upload(filePath, proofFile, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            console.error('Upload error:', uploadError);
+            throw new Error(`Failed to upload file ${proofFile.name}: ${uploadError.message}`);
+          }
+
+          if (!uploadData) {
+            throw new Error(`Upload failed for file ${proofFile.name}: No upload data returned`);
+          }
+
+          const { data: urlData } = supabase.storage
+            .from("expenses")
+            .getPublicUrl(filePath);
+            
+          if (!urlData?.publicUrl) {
+            throw new Error(`Failed to get public URL for file ${proofFile.name}`);
+          }
+          
+          proofUrls.push(urlData.publicUrl);
+          console.log(`Successfully uploaded: ${proofFile.name}`);
+        }
+        
+        console.log(`All files uploaded successfully. URLs:`, proofUrls);
+      }
+
+      console.log("Preparing expense data for Firestore...");
+      
+      // Determine if this is a personal expense or needs approval
+      const isPersonalExpense = form.category === "personal";
+      const collectionName = isPersonalExpense ? "personalExpenses" : "expenses";
+      
       const expenseData = {
         ...form,
         billImages: proofUrls,
         total,
+        status: isPersonalExpense ? "Personal Tracking" : "Under Review", // Personal expenses don't need approval
+        isPersonal: isPersonalExpense, // Flag to easily identify personal expenses
         user: {
           uid: user?.uid,
           name: user?.displayName,
@@ -541,70 +622,99 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       };
       delete (expenseData as any).file; // Remove redundant `file` property from form state
 
-      const docRef = await addDoc(collection(db, "expenses"), expenseData);
-
-      // Send email notification
-      await sendNewExpenseNotification({
-        id: docRef.id,
-        user: {
-          name: user?.displayName || user?.email || "Unknown User",
-          email: user?.email || "",
-          department: "Not specified", // You can add department to user profile later
-        },
-        date: expenseData.date,
-        purpose: expenseData.notes || "General expense", // Using notes as purpose for now
-        hotel:
-          form.category === "personal"
-            ? form.home.reduce((sum, item) => sum + Number(item.amount), 0)
-            : form.category === "official"
-            ? form.hotel.reduce((sum, item) => sum + Number(item.amount), 0)
-            : form.category === "site"
-            ? form.stay.reduce((sum, item) => sum + Number(item.amount), 0)
-            : 0,
-        transport:
-          form.category === "personal"
-            ? form.travel.reduce((sum, item) => sum + Number(item.amount), 0)
-            : form.category === "official"
-            ? form.transport.reduce((sum, item) => sum + Number(item.amount), 0)
-            : form.category === "site"
-            ? form.transportOfMaterial.reduce(
-                (sum, item) => sum + Number(item.amount),
-                0
-              ) +
-              form.localCommute.reduce(
-                (sum, item) => sum + Number(item.amount),
-                0
-              )
-            : 0,
-        fuel:
-          form.category === "personal"
-            ? form.fuel.reduce((sum, item) => sum + Number(item.amount), 0)
-            : form.category === "official"
-            ? form.fuel.reduce((sum, item) => sum + Number(item.amount), 0)
-            : 0,
-        meals:
-          form.category === "personal"
-            ? form.food.reduce((sum, item) => sum + Number(item.amount), 0) +
-              form.grocery.reduce((sum, item) => sum + Number(item.amount), 0)
-            : form.category === "official"
-            ? form.food.reduce((sum, item) => sum + Number(item.amount), 0)
-            : 0,
-        entertainment:
-          form.category === "personal"
-            ? form.entertainment.reduce(
-                (sum, item) => sum + Number(item.amount),
-                0
-              )
-            : 0,
-        total: total,
-        createdAt: expenseData.createdAt,
-        notes: expenseData.notes,
+      console.log("Saving expense to Firestore...", {
+        category: expenseData.category,
+        total: expenseData.total,
+        attachmentCount: proofUrls.length,
+        collection: collectionName,
+        isPersonal: isPersonalExpense
       });
 
-      // Show email sent toast
-      safeSetState(() => setToastMessage("Email sent successfully"));
-      safeSetState(() => setShowToast(true));
-      setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+      const docRef = await addDoc(collection(db, collectionName), expenseData);
+      
+      console.log("Expense saved successfully with ID:", docRef.id);
+
+      // Send email notification only for non-personal expenses (non-blocking)
+      if (!isPersonalExpense) {
+        try {
+          console.log("Sending email notification for approval workflow...");
+          await sendNewExpenseNotification({
+          id: docRef.id,
+          user: {
+            name: user?.displayName || user?.email || "Unknown User",
+            email: user?.email || "",
+            department: "Not specified", // You can add department to user profile later
+          },
+          date: expenseData.date,
+          purpose: expenseData.notes || "General expense", // Using notes as purpose for now
+          hotel:
+            form.category === "personal"
+              ? form.home.reduce((sum, item) => sum + Number(item.amount), 0)
+              : form.category === "official"
+              ? form.hotel.reduce((sum, item) => sum + Number(item.amount), 0)
+              : form.category === "site"
+              ? form.stay.reduce((sum, item) => sum + Number(item.amount), 0)
+              : 0,
+          transport:
+            form.category === "personal"
+              ? form.travel.reduce((sum, item) => sum + Number(item.amount), 0)
+              : form.category === "official"
+              ? form.transport.reduce((sum, item) => sum + Number(item.amount), 0)
+              : form.category === "site"
+              ? form.transportOfMaterial.reduce(
+                  (sum, item) => sum + Number(item.amount),
+                  0
+                ) +
+                form.localCommute.reduce(
+                  (sum, item) => sum + Number(item.amount),
+                  0
+                )
+              : 0,
+          fuel:
+            form.category === "personal"
+              ? form.fuel.reduce((sum, item) => sum + Number(item.amount), 0)
+              : form.category === "official"
+              ? form.fuel.reduce((sum, item) => sum + Number(item.amount), 0)
+              : 0,
+          meals:
+            form.category === "personal"
+              ? form.food.reduce((sum, item) => sum + Number(item.amount), 0) +
+                form.grocery.reduce((sum, item) => sum + Number(item.amount), 0)
+              : form.category === "official"
+              ? form.food.reduce((sum, item) => sum + Number(item.amount), 0)
+              : 0,
+          entertainment:
+            form.category === "personal"
+              ? form.entertainment.reduce(
+                  (sum, item) => sum + Number(item.amount),
+                  0
+                )
+              : 0,
+          total: total,
+          createdAt: expenseData.createdAt,
+          notes: expenseData.notes,
+        });
+        
+        console.log("Email notification sent successfully");
+
+        // Show email sent toast
+        safeSetState(() => setToastMessage("Email sent successfully"));
+        safeSetState(() => setShowToast(true));
+        setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+      } catch (emailError) {
+        console.warn("Email notification failed (expense still saved):", emailError);
+        // Show warning toast instead of failing the entire submission
+        safeSetState(() => setToastMessage("Expense saved successfully, but email notification failed"));
+        safeSetState(() => setShowToast(true));
+        setTimeout(() => safeSetState(() => setShowToast(false)), 4000);
+      }
+      } else {
+        // For personal expenses, show a different message
+        console.log("Personal expense saved - no approval workflow needed");
+        safeSetState(() => setToastMessage("Personal expense saved to your tracking"));
+        safeSetState(() => setShowToast(true));
+        setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+      }
 
       safeSetState(() => setShowLoadingModal(false));
       safeSetState(() => setShowSuccessModal(true));
@@ -623,10 +733,29 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       }
     } catch (err: any) {
       console.error("Expense submit error:", err);
+      console.error("Error details:", {
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
+        cause: err.cause
+      });
+      
       safeSetState(() => setShowLoadingModal(false));
-      safeSetState(() =>
-        setErrorMessage(err.message || "Error submitting expense")
-      );
+      
+      let errorMsg = "Error submitting expense";
+      if (err.message) {
+        if (err.message.includes("Failed to upload file")) {
+          errorMsg = `File upload failed: ${err.message}`;
+        } else if (err.message.includes("storage")) {
+          errorMsg = "File storage error. Please try again or contact support.";
+        } else if (err.message.includes("network") || err.message.includes("fetch")) {
+          errorMsg = "Network error. Please check your connection and try again.";
+        } else {
+          errorMsg = err.message;
+        }
+      }
+      
+      safeSetState(() => setErrorMessage(errorMsg));
       safeSetState(() => setShowErrorModal(true));
       safeSetState(() => setLoading(false));
     }
@@ -2017,7 +2146,9 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 className="text-center text-base mb-6"
                 style={{ color: "var(--foreground)" }}
               >
-                Your expense has been successfully submitted for review
+                {form.category === "personal" 
+                  ? "Your personal expense has been saved to your tracking" 
+                  : "Your expense has been successfully submitted for review"}
               </Dialog.Description>
               <div className="flex justify-center w-full">
                 <Button

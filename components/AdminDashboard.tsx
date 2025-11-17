@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, updateDoc, doc, query, where, orderBy, deleteDoc, addDoc } from 'firebase/firestore';
 import { Card, Input, Button } from "./ui/shadcn";
@@ -199,6 +199,19 @@ export default function AdminDashboard() {
   const handleRemarksBlur = (id: string) => {
     if (remarksDraft[id] !== undefined) {
       handleRemarksChange(id, remarksDraft[id]);
+    }
+  };
+
+  // Helper function to get remarks draft value with proper initialization
+  const getRemarksDraftValue = useCallback((expenseId: string, existingRemarks: string = '') => {
+    return remarksDraft[expenseId] !== undefined ? remarksDraft[expenseId] : existingRemarks;
+  }, [remarksDraft]);
+
+  // Submit remarks for an expense
+  const handleSubmitRemarks = async (expenseId: string) => {
+    const currentValue = remarksDraft[expenseId];
+    if (currentValue !== undefined) {
+      await handleRemarksChange(expenseId, currentValue);
     }
   };
 
@@ -407,37 +420,130 @@ export default function AdminDashboard() {
 
   const handleDownloadMasterExcel = () => {
     const wb = XLSX.utils.book_new();
+    
     Object.entries(groupedByUser).forEach(([email, userExpenses]) => {
-      const ws = XLSX.utils.json_to_sheet(
-        (userExpenses as any[]).map((exp: any) => ({
+      const detailedRows: any[] = [];
+      
+      (userExpenses as any[]).forEach((exp: any) => {
+        const baseInfo = {
+          Name: exp.user?.name,
+          Contact: exp.user?.number || exp.user?.phone || 'Not available',
           Date: exp.date,
           Purpose: exp.purpose,
-          Hotel: exp.hotel,
-          Transport: exp.transport,
-          Fuel: exp.fuel,
-          Meals: exp.meals,
-          Entertainment: exp.entertainment,
           Notes: exp.notes,
-          Total: exp.total,
           Status: exp.status || 'Submitted',
           'Action By': exp.actionBy ? `${exp.actionBy.name} (${exp.actionBy.timestamp})` : 
                       exp.closedBy ? `${exp.closedBy.name} - Closed (${exp.closedBy.timestamp})` : '-',
           'Document Link': exp.file || '',
           'Bill Image Links': exp.billImages ? exp.billImages.join(', ') : '',
-          Name: exp.user?.name,
           Email: exp.user?.email,
           SubmittedAt: exp.createdAt?.toDate ? exp.createdAt.toDate().toLocaleString() : '',
           'Location Address': exp.location?.address || 'Not available',
           'Location Coordinates': exp.location?.latitude && exp.location?.longitude ? 
             `${exp.location.latitude.toFixed(6)}, ${exp.location.longitude.toFixed(6)}` : 'Not available',
           'Location Timestamp': exp.location?.timestamp || 'Not available',
-        }))
-      );
+          'Total Expense': exp.total
+        };
+
+        // Helper function to add expense breakdown rows
+        const addExpenseItems = (items: any[], categoryName: string, subcategoryName: string) => {
+          if (items && items.length > 0) {
+            items.forEach((item: any, index: number) => {
+              detailedRows.push({
+                ...baseInfo,
+                Category: categoryName,
+                'Sub-Category': `${subcategoryName}${index + 1}`,
+                'Item Description': item.description || item.label || `${subcategoryName} ${index + 1}`,
+                'Item Amount': Number(item.amount) || 0
+              });
+            });
+          }
+        };
+
+        // Process different expense categories
+        if (exp.category === 'personal') {
+          // Personal category breakdown
+          addExpenseItems(exp.food, 'Personal', 'Food');
+          addExpenseItems(exp.fuel, 'Personal', 'Fuel');
+          addExpenseItems(exp.entertainment, 'Personal', 'Entertainment');
+          addExpenseItems(exp.utility, 'Personal', 'Utility');
+          addExpenseItems(exp.home, 'Personal', 'Home');
+          addExpenseItems(exp.travel, 'Personal', 'Travel');
+          addExpenseItems(exp.grocery, 'Personal', 'Grocery');
+          addExpenseItems(exp.miscellaneous, 'Personal', 'Miscellaneous');
+        } else if (exp.category === 'official') {
+          // Official category breakdown
+          addExpenseItems(exp.food, 'Official', 'Food');
+          addExpenseItems(exp.fuel, 'Official', 'Fuel');
+          addExpenseItems(exp.transport, 'Official', 'Transport');
+          addExpenseItems(exp.hotel, 'Official', 'Hotel');
+          addExpenseItems(exp.miscellaneous, 'Official', 'Miscellaneous');
+        } else if (exp.category === 'site') {
+          // Site category breakdown
+          if (exp.siteName) {
+            detailedRows.push({
+              ...baseInfo,
+              Category: 'Site',
+              'Sub-Category': 'Site Info',
+              'Item Description': `Site: ${exp.siteName}`,
+              'Item Amount': 0
+            });
+          }
+          addExpenseItems(exp.labour, 'Site', 'Labour');
+          addExpenseItems(exp.travel, 'Site', 'Travel');
+          addExpenseItems(exp.tools, 'Site', 'Tools');
+          addExpenseItems(exp.consumables, 'Site', 'Consumables');
+          addExpenseItems(exp.stay, 'Site', 'Stay');
+          addExpenseItems(exp.transportOfMaterial, 'Site', 'Transport of Material');
+          addExpenseItems(exp.localCommute, 'Site', 'Local Commute');
+          addExpenseItems(exp.miscellaneous, 'Site', 'Miscellaneous');
+        } else {
+          // Legacy format or others
+          const legacyItems = [
+            { name: 'Hotel', value: exp.hotel },
+            { name: 'Transport', value: exp.transport },
+            { name: 'Fuel', value: exp.fuel },
+            { name: 'Meals', value: exp.meals },
+            { name: 'Entertainment', value: exp.entertainment }
+          ];
+
+          legacyItems.forEach((item) => {
+            if (item.value && Number(item.value) > 0) {
+              detailedRows.push({
+                ...baseInfo,
+                Category: exp.category || 'Other',
+                'Sub-Category': item.name,
+                'Item Description': `${item.name} expense`,
+                'Item Amount': Number(item.value) || 0
+              });
+            }
+          });
+
+          // Handle others array for legacy format
+          if (exp.others && exp.others.length > 0) {
+            addExpenseItems(exp.others, exp.category || 'Other', 'Other');
+          }
+        }
+
+        // If no detailed items were added, add a summary row
+        if (detailedRows.filter(row => row.Date === exp.date && row.Name === exp.user?.name).length === 0) {
+          detailedRows.push({
+            ...baseInfo,
+            Category: exp.category || 'Other',
+            'Sub-Category': 'Total',
+            'Item Description': 'Total expense amount',
+            'Item Amount': exp.total || 0
+          });
+        }
+      });
+
+      const ws = XLSX.utils.json_to_sheet(detailedRows);
       XLSX.utils.book_append_sheet(wb, ws, email.replace(/[@.]/g, '_'));
     });
+    
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-    saveAs(blob, `master_expenses.xlsx`);
+    saveAs(blob, `master_expenses_detailed.xlsx`);
   };
 
   // Sort expenses: open first, closed (locked) at the bottom
@@ -609,19 +715,32 @@ export default function AdminDashboard() {
                     {/* Comment Input */}
                     <div>
                       <label className="block text-sm font-medium mb-2">Comment</label>
-                      <textarea
-                        value={remarksDraft[exp.id] !== undefined ? remarksDraft[exp.id] : (exp.remarks || '')}
-                        onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
-                        placeholder="Add your comments about this expense..."
-                        className="w-full p-3 border rounded resize-none"
-                        style={{ 
-                          background: 'var(--surface)', 
-                          color: 'var(--foreground)', 
-                          borderColor: 'var(--muted)',
-                          minHeight: '80px'
-                        }}
-                        rows={3}
-                      />
+                      <div className="flex gap-2">
+                        <textarea
+                          value={getRemarksDraftValue(exp.id, exp.remarks || '')}
+                          onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                          placeholder="Add your comments about this expense..."
+                          className="flex-1 p-3 border rounded resize-none"
+                          style={{ 
+                            background: 'var(--surface)', 
+                            color: 'var(--foreground)', 
+                            borderColor: 'var(--muted)',
+                            minHeight: '80px'
+                          }}
+                          rows={3}
+                        />
+                        <Button
+                          onClick={() => handleSubmitRemarks(exp.id)}
+                          className="px-3 py-2 self-start"
+                          style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+                          title="Save Comment"
+                        >
+                          ✓
+                        </Button>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        💡 Click the ✓ button to save your comment
+                      </div>
                     </div>
 
                     {/* Action Buttons */}
@@ -883,19 +1002,32 @@ export default function AdminDashboard() {
                         {/* Additional Comment */}
                         <div>
                           <label className="block text-sm font-medium mb-2">Final Comment (Optional)</label>
-                          <textarea
-                            value={remarksDraft[exp.id] || ''}
-                            onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
-                            placeholder="Add final approval comments..."
-                            className="w-full p-3 border rounded resize-none"
-                            style={{ 
-                              background: 'var(--surface)', 
-                              color: 'var(--foreground)', 
-                              borderColor: 'var(--muted)',
-                              minHeight: '60px'
-                            }}
-                            rows={2}
-                          />
+                          <div className="flex gap-2">
+                            <textarea
+                              value={getRemarksDraftValue(exp.id, '')}
+                              onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                              placeholder="Add final approval comments..."
+                              className="flex-1 p-3 border rounded resize-none"
+                              style={{ 
+                                background: 'var(--surface)', 
+                                color: 'var(--foreground)', 
+                                borderColor: 'var(--muted)',
+                                minHeight: '60px'
+                              }}
+                              rows={2}
+                            />
+                            <Button
+                              onClick={() => handleSubmitRemarks(exp.id)}
+                              className="px-3 py-2 self-start"
+                              style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+                              title="Save Comment"
+                            >
+                              ✓
+                            </Button>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            💡 Click the ✓ button to save your comment
+                          </div>
                         </div>
 
                         {/* Final Action Buttons */}
@@ -1024,6 +1156,47 @@ export default function AdminDashboard() {
                               <div className="opacity-90">by {exp.finalApprovedBy.name} on {exp.finalApprovedBy.timestamp}</div>
                             </div>
                           )}
+                          
+                          {/* Previous Comments Display */}
+                          {exp.remarks && (
+                            <div className="p-3 rounded" style={{ background: 'var(--surface)', border: '1px solid var(--muted)' }}>
+                              <h6 className="font-semibold text-sm mb-2" style={{ color: 'var(--primary)' }}>📝 Previous Comments</h6>
+                              <div className="text-sm" style={{ color: 'var(--foreground)' }}>
+                                {exp.remarks}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Comments Section */}
+                          <div className="space-y-3 p-4 rounded" style={{ background: 'var(--accent-light)' }}>
+                            <h6 className="font-semibold text-sm" style={{ color: 'var(--primary)' }}>💬 Add Payment Comments</h6>
+                            <div className="flex gap-2">
+                              <textarea
+                                value={getRemarksDraftValue(exp.id, exp.remarks || '')}
+                                onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
+                                placeholder="Add payment comments, processing notes, or payment method details..."
+                                className="flex-1 p-3 border rounded resize-none"
+                                style={{ 
+                                  background: 'var(--surface)', 
+                                  color: 'var(--foreground)', 
+                                  borderColor: 'var(--muted)',
+                                  minHeight: '80px'
+                                }}
+                                rows={3}
+                              />
+                              <Button
+                                onClick={() => handleSubmitRemarks(exp.id)}
+                                className="px-3 py-2 self-start"
+                                style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+                                title="Save Payment Comment"
+                              >
+                                ✓
+                              </Button>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              � Click the ✓ button to save your payment comments
+                            </div>
+                          </div>
                           
                           {/* Payment Actions */}
                           {!exp.locked && (

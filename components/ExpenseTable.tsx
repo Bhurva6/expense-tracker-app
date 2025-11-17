@@ -8,6 +8,7 @@ import { Card } from "./ui/shadcn";
 export default function ExpenseTable() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [personalExpenses, setPersonalExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -29,7 +30,10 @@ export default function ExpenseTable() {
     let weekSpend = 0;
     const categorySpend: Record<string, number> = {};
 
-    expenses.forEach((exp: any) => {
+    // Include both regular and personal expenses in calculations
+    const allExpenses = [...expenses, ...personalExpenses];
+    
+    allExpenses.forEach((exp: any) => {
       const expenseDate = new Date(exp.createdAt.seconds * 1000);
       const amount = exp.total || 0;
       
@@ -66,13 +70,23 @@ export default function ExpenseTable() {
     setLoading(true);
     const fetchExpenses = async () => {
       try {
-        const q = query(
+        // Fetch regular expenses (for approval workflow)
+        const expensesQuery = query(
           collection(db, 'expenses'),
           where('user.uid', '==', user.uid),
           orderBy('createdAt', 'desc')
         );
-        const snapshot = await getDocs(q);
-        setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const expensesSnapshot = await getDocs(expensesQuery);
+        setExpenses(expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        // Fetch personal expenses (tracking only)
+        const personalQuery = query(
+          collection(db, 'personalExpenses'),
+          where('user.uid', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+        const personalSnapshot = await getDocs(personalQuery);
+        setPersonalExpenses(personalSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (err: any) {
         setError(err.message || 'Error fetching expenses');
       } finally {
@@ -84,7 +98,7 @@ export default function ExpenseTable() {
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
-  if (!expenses.length) return <div>No expenses found.</div>;
+  if (!expenses.length && !personalExpenses.length) return <div>No expenses found.</div>;
 
   return (
     <div className="max-w-6xl mx-auto mt-8">
@@ -146,20 +160,84 @@ export default function ExpenseTable() {
         </div>
       )}
 
-      <div className="shadow-lg rounded-lg p-6" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
-        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--primary)' }}>My Expenses</h2>
-        <table className="min-w-full text-sm border-separate border-spacing-y-1" style={{ background: 'var(--surface)' }}>
-        <thead>
-            <tr style={{ background: 'var(--accent-light)', color: 'var(--foreground)' }}>
-              <th className="px-4 py-2 text-left rounded-tl-lg">Date</th>
-              <th className="px-4 py-2 text-left">Category</th>
-              <th className="px-4 py-2 text-right">Total</th>
-              <th className="px-4 py-2 text-center">Status</th>
-              <th className="px-4 py-2 text-center rounded-tr-lg">Proof</th>
-          </tr>
-        </thead>
-        <tbody>
-            {expenses.map((exp, idx) => (
+      {/* Personal Expenses Section */}
+      {personalExpenses.length > 0 && (
+        <div className="shadow-lg rounded-lg p-6 mb-6" style={{ background: 'var(--surface)', color: 'var(--foreground)', border: '2px solid #10b981' }}>
+          <h2 className="text-xl font-bold mb-4 flex items-center" style={{ color: '#10b981' }}>
+            <span className="mr-2">📊</span>Personal Expense Tracking
+            <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">No Approval Needed</span>
+          </h2>
+          <table className="min-w-full text-sm border-separate border-spacing-y-1" style={{ background: 'var(--surface)' }}>
+            <thead>
+              <tr style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--foreground)' }}>
+                <th className="px-4 py-2 text-left rounded-tl-lg">Date</th>
+                <th className="px-4 py-2 text-left">Category</th>
+                <th className="px-4 py-2 text-right">Total</th>
+                <th className="px-4 py-2 text-center">Status</th>
+                <th className="px-4 py-2 text-center rounded-tr-lg">Proof</th>
+              </tr>
+            </thead>
+            <tbody>
+              {personalExpenses.map((exp, idx) => (
+                <tr key={exp.id} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'rgba(16,185,129,0.05)', borderRadius: 8 }}>
+                  <td className="px-4 py-2 align-top rounded-l-lg">{new Date(exp.createdAt.seconds * 1000).toLocaleDateString()}</td>
+                  <td className="px-4 py-2 align-top">{exp.purpose || exp.category}</td>
+                  <td className="px-4 py-2 align-top text-right">₹{formatAmount(exp.total)}</td>
+                  <td className="px-4 py-2 align-top text-center">
+                    <span
+                      className="inline-block px-2 py-1 rounded text-xs font-semibold"
+                      style={{
+                        background: 'rgba(16,185,129,0.15)',
+                        color: '#10b981',
+                      }}
+                    >
+                      Personal Tracking
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 align-top rounded-r-lg text-center">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {exp.billImages && exp.billImages.map((url: string, idx: number) => (
+                        isImageUrl(url) ? (
+                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt={`Proof ${idx + 1}`} className="w-12 h-12 object-cover rounded border hover:scale-105 transition-transform" style={{ borderColor: 'var(--muted)' }} />
+                          </a>
+                        ) : (
+                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="inline-block px-3 py-1 rounded shadow hover:bg-opacity-80 transition text-xs" style={{ background: '#10b981', color: 'white' }}>
+                            📄 View
+                          </a>
+                        )
+                      ))}
+                      {(!exp.billImages || exp.billImages.length === 0) && (
+                        <span className="text-gray-400 text-xs">No attachments</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Regular Expenses Section (Approval Workflow) */}
+      {expenses.length > 0 && (
+        <div className="shadow-lg rounded-lg p-6" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
+          <h2 className="text-xl font-bold mb-4 flex items-center" style={{ color: 'var(--primary)' }}>
+            <span className="mr-2">💼</span>Official/Site Expenses
+            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Approval Required</span>
+          </h2>
+          <table className="min-w-full text-sm border-separate border-spacing-y-1" style={{ background: 'var(--surface)' }}>
+            <thead>
+              <tr style={{ background: 'var(--accent-light)', color: 'var(--foreground)' }}>
+                <th className="px-4 py-2 text-left rounded-tl-lg">Date</th>
+                <th className="px-4 py-2 text-left">Category</th>
+                <th className="px-4 py-2 text-right">Total</th>
+                <th className="px-4 py-2 text-center">Status</th>
+                <th className="px-4 py-2 text-center rounded-tr-lg">Proof</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((exp, idx) => (
               <tr key={exp.id} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--accent-light)', borderRadius: 8 }}>
                 <td className="px-4 py-2 align-top rounded-l-lg">{new Date(exp.createdAt.seconds * 1000).toLocaleDateString()}</td>
                 <td className="px-4 py-2 align-top">{exp.purpose || exp.category}</td>
@@ -204,7 +282,16 @@ export default function ExpenseTable() {
           ))}
         </tbody>
       </table>
-      </div>
+        </div>
+      )}
+
+      {/* Message when no expenses exist */}
+      {expenses.length === 0 && personalExpenses.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-lg text-gray-500">No expenses found.</p>
+          <p className="text-sm text-gray-400 mt-2">Start by adding your first expense!</p>
+        </div>
+      )}
     </div>
   );
 } 
