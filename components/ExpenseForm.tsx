@@ -159,6 +159,11 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedExpenseInfo, setSubmittedExpenseInfo] = useState<{
+    total: number;
+    attachmentCount: number;
+    category: string;
+  } | null>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -553,6 +558,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       if (allFiles.length > 0) {
         console.log(`Uploading ${allFiles.length} files...`);
         
+        const bucketName = "expenses";
+        
         for (const proofFile of allFiles) {
           if (!proofFile || !proofFile.name) {
             console.warn('Skipping invalid file:', proofFile);
@@ -560,19 +567,36 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           }
           
           const sanitizedFileName = proofFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-          const filePath = `expenses/${user?.uid}/${Date.now()}_${sanitizedFileName}`;
+          const filePath = `${user?.uid}/${Date.now()}_${sanitizedFileName}`;
           
-          console.log(`Uploading file: ${proofFile.name} to ${filePath}`);
+          console.log(`Uploading file: ${proofFile.name} to bucket "${bucketName}", path: ${filePath}`);
           
           const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("expenses")
+            .from(bucketName)
             .upload(filePath, proofFile, {
               cacheControl: '3600',
               upsert: false
             });
 
           if (uploadError) {
-            console.error('Upload error:', uploadError);
+            console.error('Upload error details:', {
+              message: uploadError.message,
+              name: uploadError.name,
+              cause: (uploadError as any).cause,
+              statusCode: (uploadError as any).statusCode
+            });
+            
+            // Provide more helpful error messages
+            if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket not found')) {
+              throw new Error(`Storage bucket "${bucketName}" not found. Please create a bucket named "${bucketName}" in your Supabase dashboard under Storage > New Bucket. Make sure to check "Public bucket".`);
+            } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy') || uploadError.message.includes('security') || uploadError.message.includes('violates')) {
+              throw new Error(`Upload permission denied. Go to Supabase Dashboard > Storage > ${bucketName} bucket > Policies tab, and add a policy that allows INSERT for "anon" and "authenticated" roles with policy definition: true`);
+            } else if (uploadError.message.includes('exceed') || uploadError.message.includes('size')) {
+              throw new Error(`File "${proofFile.name}" is too large. Please reduce the file size.`);
+            } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey')) {
+              throw new Error(`Invalid Supabase configuration. Please check your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.`);
+            }
+            
             throw new Error(`Failed to upload file ${proofFile.name}: ${uploadError.message}`);
           }
 
@@ -581,7 +605,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           }
 
           const { data: urlData } = supabase.storage
-            .from("expenses")
+            .from(bucketName)
             .getPublicUrl(filePath);
             
           if (!urlData?.publicUrl) {
@@ -601,12 +625,51 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       const isPersonalExpense = form.category === "personal";
       const collectionName = isPersonalExpense ? "personalExpenses" : "expenses";
       
+      // Helper function to clean File objects from expense items
+      const cleanExpenseItems = (items: ExpenseItem[]) => {
+        return items.map(item => ({
+          amount: item.amount,
+          description: item.description,
+          // Don't include files - they're already uploaded and URLs are in billImages
+        }));
+      };
+
+      // Helper function to clean "others" items
+      const cleanOthersItems = (items: { label: string; amount: string; files: File[] }[]) => {
+        return items.map(item => ({
+          label: item.label,
+          amount: item.amount,
+        }));
+      };
+      
       const expenseData = {
-        ...form,
+        date: form.date,
+        category: form.category,
+        notes: form.notes,
+        siteName: form.siteName,
+        // Clean each category array to remove File objects
+        food: cleanExpenseItems(form.food),
+        fuel: cleanExpenseItems(form.fuel),
+        entertainment: cleanExpenseItems(form.entertainment),
+        utility: cleanExpenseItems(form.utility),
+        home: cleanExpenseItems(form.home),
+        travel: cleanExpenseItems(form.travel),
+        grocery: cleanExpenseItems(form.grocery),
+        transport: cleanExpenseItems(form.transport),
+        hotel: cleanExpenseItems(form.hotel),
+        labour: cleanExpenseItems(form.labour),
+        tools: cleanExpenseItems(form.tools),
+        consumables: cleanExpenseItems(form.consumables),
+        stay: cleanExpenseItems(form.stay),
+        transportOfMaterial: cleanExpenseItems(form.transportOfMaterial),
+        localCommute: cleanExpenseItems(form.localCommute),
+        miscellaneous: cleanExpenseItems(form.miscellaneous),
+        others: cleanOthersItems(form.others),
+        // Add metadata
         billImages: proofUrls,
         total,
-        status: isPersonalExpense ? "Personal Tracking" : "Under Review", // Personal expenses don't need approval
-        isPersonal: isPersonalExpense, // Flag to easily identify personal expenses
+        status: isPersonalExpense ? "Personal Tracking" : "Under Review",
+        isPersonal: isPersonalExpense,
         user: {
           uid: user?.uid,
           name: user?.displayName,
@@ -620,7 +683,6 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         },
         createdAt: Timestamp.now(),
       };
-      delete (expenseData as any).file; // Remove redundant `file` property from form state
 
       console.log("Saving expense to Firestore...", {
         category: expenseData.category,
@@ -717,6 +779,11 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       }
 
       safeSetState(() => setShowLoadingModal(false));
+      safeSetState(() => setSubmittedExpenseInfo({
+        total: total,
+        attachmentCount: proofUrls.length,
+        category: form.category,
+      }));
       safeSetState(() => setShowSuccessModal(true));
 
       if (mounted.current) {
@@ -964,6 +1031,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
   const closeSuccessModal = () => {
     safeSetState(() => setShowSuccessModal(false));
+    safeSetState(() => setSubmittedExpenseInfo(null));
     router.push("/");
   };
 
@@ -2140,16 +2208,46 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 className="text-2xl font-semibold text-center mb-2"
                 style={{ color: "var(--primary)" }}
               >
-                Success!
+                Expense Submitted!
               </Dialog.Title>
               <Dialog.Description
-                className="text-center text-base mb-6"
+                className="text-center text-base mb-4"
                 style={{ color: "var(--foreground)" }}
               >
-                {form.category === "personal" 
+                {submittedExpenseInfo?.category === "personal" 
                   ? "Your personal expense has been saved to your tracking" 
                   : "Your expense has been successfully submitted for review"}
               </Dialog.Description>
+              
+              {/* Expense Details */}
+              <div className="w-full bg-gray-50 rounded-lg p-4 mb-6 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total Amount:</span>
+                  <span className="font-semibold text-lg" style={{ color: "var(--primary)" }}>
+                    ₹{submittedExpenseInfo?.total?.toLocaleString() || 0}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Attachments:</span>
+                  <span className="font-medium flex items-center gap-1">
+                    {submittedExpenseInfo?.attachmentCount && submittedExpenseInfo.attachmentCount > 0 ? (
+                      <>
+                        <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                        </svg>
+                        {submittedExpenseInfo.attachmentCount} file{submittedExpenseInfo.attachmentCount > 1 ? 's' : ''} uploaded
+                      </>
+                    ) : (
+                      <span className="text-gray-400">No attachments</span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Category:</span>
+                  <span className="font-medium capitalize">{submittedExpenseInfo?.category || 'N/A'}</span>
+                </div>
+              </div>
+
               <div className="flex justify-center w-full">
                 <Button
                   onClick={closeSuccessModal}

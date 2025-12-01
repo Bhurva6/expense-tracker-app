@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, updateDoc, doc, query, where, orderBy, deleteDoc, addDoc } from 'firebase/firestore';
 import { Card, Input, Button } from "./ui/shadcn";
@@ -10,6 +10,60 @@ import { useAuth } from '../context/AuthContext';
 import { sendStatusChangeNotification, sendExpenseClosedNotification } from '../lib/emailService';
 import EmailTestComponent from './EmailTestComponent';
 import { useRouter } from 'next/navigation';
+
+// Memoized Remarks Input Component to prevent re-renders while typing
+const RemarksInput = memo(function RemarksInput({ 
+  expenseId, 
+  initialValue = '', 
+  placeholder = 'Add your comments...',
+  onSave,
+  rows = 3,
+  minHeight = '80px'
+}: { 
+  expenseId: string; 
+  initialValue?: string; 
+  placeholder?: string;
+  onSave: (id: string, value: string) => void;
+  rows?: number;
+  minHeight?: string;
+}) {
+  const [localValue, setLocalValue] = useState(initialValue);
+
+  // Update local value if initialValue changes (e.g., after fetch)
+  useEffect(() => {
+    setLocalValue(initialValue);
+  }, [initialValue]);
+
+  const handleSave = useCallback(() => {
+    onSave(expenseId, localValue);
+  }, [expenseId, localValue, onSave]);
+
+  return (
+    <div className="flex gap-2">
+      <textarea
+        value={localValue}
+        onChange={e => setLocalValue(e.target.value)}
+        placeholder={placeholder}
+        className="flex-1 p-3 border rounded resize-none"
+        style={{ 
+          background: 'var(--surface)', 
+          color: 'var(--foreground)', 
+          borderColor: 'var(--muted)',
+          minHeight
+        }}
+        rows={rows}
+      />
+      <Button
+        onClick={handleSave}
+        className="px-3 py-2 self-start"
+        style={{ background: 'var(--primary)', color: 'var(--surface)' }}
+        title="Save Comment"
+      >
+        ✓
+      </Button>
+    </div>
+  );
+});
 
 const ADMIN_EMAILS = ['bhurvaxsharma.india@gmail.com',
   'nitishjain0109@gmail.com',
@@ -203,15 +257,24 @@ export default function AdminDashboard() {
   };
 
   // Helper function to get remarks draft value with proper initialization
-  const getRemarksDraftValue = useCallback((expenseId: string, existingRemarks: string = '') => {
-    return remarksDraft[expenseId] !== undefined ? remarksDraft[expenseId] : existingRemarks;
-  }, [remarksDraft]);
+  const getRemarksDraftValue = (expenseId: string, existingRemarks: string = '') => {
+    if (remarksDraft[expenseId] !== undefined) {
+      return remarksDraft[expenseId];
+    }
+    return existingRemarks;
+  };
+
+  // Helper function to initialize draft if not exists
+  const initializeRemarksDraft = (expenseId: string, existingRemarks: string = '') => {
+    if (remarksDraft[expenseId] === undefined) {
+      setRemarksDraft(prev => ({ ...prev, [expenseId]: existingRemarks }));
+    }
+  };
 
   // Submit remarks for an expense
   const handleSubmitRemarks = async (expenseId: string) => {
-    const currentValue = remarksDraft[expenseId];
-    if (currentValue !== undefined) {
-      await handleRemarksChange(expenseId, currentValue);
+    if (remarksDraft[expenseId] !== undefined) {
+      await handleRemarksChange(expenseId, remarksDraft[expenseId]);
     }
   };
 
@@ -715,29 +778,14 @@ export default function AdminDashboard() {
                     {/* Comment Input */}
                     <div>
                       <label className="block text-sm font-medium mb-2">Comment</label>
-                      <div className="flex gap-2">
-                        <textarea
-                          value={getRemarksDraftValue(exp.id, exp.remarks || '')}
-                          onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
-                          placeholder="Add your comments about this expense..."
-                          className="flex-1 p-3 border rounded resize-none"
-                          style={{ 
-                            background: 'var(--surface)', 
-                            color: 'var(--foreground)', 
-                            borderColor: 'var(--muted)',
-                            minHeight: '80px'
-                          }}
-                          rows={3}
-                        />
-                        <Button
-                          onClick={() => handleSubmitRemarks(exp.id)}
-                          className="px-3 py-2 self-start"
-                          style={{ background: 'var(--primary)', color: 'var(--surface)' }}
-                          title="Save Comment"
-                        >
-                          ✓
-                        </Button>
-                      </div>
+                      <RemarksInput
+                        expenseId={exp.id}
+                        initialValue={exp.remarks || ''}
+                        placeholder="Add your comments about this expense..."
+                        onSave={handleRemarksChange}
+                        rows={3}
+                        minHeight="80px"
+                      />
                       <div className="text-xs text-gray-500 mt-1">
                         💡 Click the ✓ button to save your comment
                       </div>
@@ -747,9 +795,6 @@ export default function AdminDashboard() {
                     <div className="flex gap-3">
                       <Button 
                         onClick={() => {
-                          if (remarksDraft[exp.id] !== undefined) {
-                            handleRemarksChange(exp.id, remarksDraft[exp.id]);
-                          }
                           handleStatusChange(exp.id, 'Approve');
                         }}
                         className="flex-1 py-3 font-semibold"
@@ -759,9 +804,6 @@ export default function AdminDashboard() {
                       </Button>
                       <Button 
                         onClick={() => {
-                          if (remarksDraft[exp.id] !== undefined) {
-                            handleRemarksChange(exp.id, remarksDraft[exp.id]);
-                          }
                           handleStatusChange(exp.id, 'Reject');
                         }}
                         className="flex-1 py-3 font-semibold"
@@ -1002,29 +1044,14 @@ export default function AdminDashboard() {
                         {/* Additional Comment */}
                         <div>
                           <label className="block text-sm font-medium mb-2">Final Comment (Optional)</label>
-                          <div className="flex gap-2">
-                            <textarea
-                              value={getRemarksDraftValue(exp.id, '')}
-                              onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
-                              placeholder="Add final approval comments..."
-                              className="flex-1 p-3 border rounded resize-none"
-                              style={{ 
-                                background: 'var(--surface)', 
-                                color: 'var(--foreground)', 
-                                borderColor: 'var(--muted)',
-                                minHeight: '60px'
-                              }}
-                              rows={2}
-                            />
-                            <Button
-                              onClick={() => handleSubmitRemarks(exp.id)}
-                              className="px-3 py-2 self-start"
-                              style={{ background: 'var(--primary)', color: 'var(--surface)' }}
-                              title="Save Comment"
-                            >
-                              ✓
-                            </Button>
-                          </div>
+                          <RemarksInput
+                            expenseId={exp.id}
+                            initialValue={exp.remarks || ''}
+                            placeholder="Add final approval comments..."
+                            onSave={handleRemarksChange}
+                            rows={2}
+                            minHeight="60px"
+                          />
                           <div className="text-xs text-gray-500 mt-1">
                             💡 Click the ✓ button to save your comment
                           </div>
@@ -1034,9 +1061,6 @@ export default function AdminDashboard() {
                         <div className="flex gap-3">
                           <Button 
                             onClick={() => {
-                              if (remarksDraft[exp.id]) {
-                                handleRemarksChange(exp.id, remarksDraft[exp.id]);
-                              }
                               handleFinalApprove(exp.id);
                             }}
                             className="flex-1 py-3 font-semibold"
@@ -1046,9 +1070,6 @@ export default function AdminDashboard() {
                           </Button>
                           <Button 
                             onClick={() => {
-                              if (remarksDraft[exp.id]) {
-                                handleRemarksChange(exp.id, remarksDraft[exp.id]);
-                              }
                               handleRejectFromApprove(exp.id);
                             }}
                             className="flex-1 py-3 font-semibold"
@@ -1170,31 +1191,16 @@ export default function AdminDashboard() {
                           {/* Comments Section */}
                           <div className="space-y-3 p-4 rounded" style={{ background: 'var(--accent-light)' }}>
                             <h6 className="font-semibold text-sm" style={{ color: 'var(--primary)' }}>💬 Add Payment Comments</h6>
-                            <div className="flex gap-2">
-                              <textarea
-                                value={getRemarksDraftValue(exp.id, exp.remarks || '')}
-                                onChange={e => handleRemarksDraftChange(exp.id, e.target.value)}
-                                placeholder="Add payment comments, processing notes, or payment method details..."
-                                className="flex-1 p-3 border rounded resize-none"
-                                style={{ 
-                                  background: 'var(--surface)', 
-                                  color: 'var(--foreground)', 
-                                  borderColor: 'var(--muted)',
-                                  minHeight: '80px'
-                                }}
-                                rows={3}
-                              />
-                              <Button
-                                onClick={() => handleSubmitRemarks(exp.id)}
-                                className="px-3 py-2 self-start"
-                                style={{ background: 'var(--primary)', color: 'var(--surface)' }}
-                                title="Save Payment Comment"
-                              >
-                                ✓
-                              </Button>
-                            </div>
+                            <RemarksInput
+                              expenseId={exp.id}
+                              initialValue={exp.remarks || ''}
+                              placeholder="Add payment comments, processing notes, or payment method details..."
+                              onSave={handleRemarksChange}
+                              rows={3}
+                              minHeight="80px"
+                            />
                             <div className="text-xs text-gray-500">
-                              � Click the ✓ button to save your payment comments
+                              💡 Click the ✓ button to save your payment comments
                             </div>
                           </div>
                           
