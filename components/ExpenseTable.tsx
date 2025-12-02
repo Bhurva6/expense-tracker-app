@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Card } from "./ui/shadcn";
 
 export default function ExpenseTable() {
@@ -71,22 +71,36 @@ export default function ExpenseTable() {
     const fetchExpenses = async () => {
       try {
         // Fetch regular expenses (for approval workflow)
+        // Note: We filter by user.uid only and sort client-side to avoid needing a composite index
         const expensesQuery = query(
           collection(db, 'expenses'),
-          where('user.uid', '==', user.uid),
-          orderBy('createdAt', 'desc')
+          where('user.uid', '==', user.uid)
         );
         const expensesSnapshot = await getDocs(expensesQuery);
-        setExpenses(expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const expensesData = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort by createdAt descending (newest first) client-side
+        expensesData.sort((a: any, b: any) => {
+          const dateA = a.createdAt?.seconds || 0;
+          const dateB = b.createdAt?.seconds || 0;
+          return dateB - dateA;
+        });
+        setExpenses(expensesData);
 
         // Fetch personal expenses (tracking only)
+        // Note: We filter by user.uid only and sort client-side to avoid needing a composite index
         const personalQuery = query(
           collection(db, 'personalExpenses'),
-          where('user.uid', '==', user.uid),
-          orderBy('createdAt', 'desc')
+          where('user.uid', '==', user.uid)
         );
         const personalSnapshot = await getDocs(personalQuery);
-        setPersonalExpenses(personalSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const personalData = personalSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort by createdAt descending (newest first) client-side
+        personalData.sort((a: any, b: any) => {
+          const dateA = a.createdAt?.seconds || 0;
+          const dateB = b.createdAt?.seconds || 0;
+          return dateB - dateA;
+        });
+        setPersonalExpenses(personalData);
       } catch (err: any) {
         setError(err.message || 'Error fetching expenses');
       } finally {

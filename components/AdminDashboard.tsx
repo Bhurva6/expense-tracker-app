@@ -18,7 +18,8 @@ const RemarksInput = memo(function RemarksInput({
   placeholder = 'Add your comments...',
   onSave,
   rows = 3,
-  minHeight = '80px'
+  minHeight = '80px',
+  clearAfterSave = true
 }: { 
   expenseId: string; 
   initialValue?: string; 
@@ -26,6 +27,7 @@ const RemarksInput = memo(function RemarksInput({
   onSave: (id: string, value: string) => void;
   rows?: number;
   minHeight?: string;
+  clearAfterSave?: boolean;
 }) {
   const [localValue, setLocalValue] = useState(initialValue);
 
@@ -36,7 +38,11 @@ const RemarksInput = memo(function RemarksInput({
 
   const handleSave = useCallback(() => {
     onSave(expenseId, localValue);
-  }, [expenseId, localValue, onSave]);
+    // Clear the input after saving if clearAfterSave is true
+    if (clearAfterSave) {
+      setLocalValue('');
+    }
+  }, [expenseId, localValue, onSave, clearAfterSave]);
 
   return (
     <div className="flex gap-2">
@@ -2742,7 +2748,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Clear All Confirmation Modal */}
-      {/* {showClearConfirm && (
+      {showClearConfirm && (
         <Dialog open={showClearConfirm} onClose={() => setShowClearConfirm(false)} className="fixed z-50 inset-0 flex items-center justify-center">
           <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
           <div className="relative rounded-lg shadow-lg p-8 max-w-md w-full z-10" style={{ background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--muted)' }}>
@@ -2775,7 +2781,7 @@ export default function AdminDashboard() {
             </div>
           </div>
         </Dialog>
-      )} */}
+      )}
       </Card>
     </div>
   );
