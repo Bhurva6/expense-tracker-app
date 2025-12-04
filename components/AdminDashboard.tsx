@@ -29,18 +29,28 @@ const RemarksInput = memo(function RemarksInput({
   minHeight?: string;
   clearAfterSave?: boolean;
 }) {
-  const [localValue, setLocalValue] = useState(initialValue);
+  const [localValue, setLocalValue] = useState('');
+  const hasSavedRef = React.useRef(false);
 
   // Update local value if initialValue changes (e.g., after fetch)
+  // But skip if we just saved (to keep the field empty for new input)
   useEffect(() => {
-    setLocalValue(initialValue);
+    if (!hasSavedRef.current) {
+      setLocalValue(initialValue);
+    }
   }, [initialValue]);
 
   const handleSave = useCallback(() => {
+    if (!localValue.trim()) return; // Don't save empty remarks
     onSave(expenseId, localValue);
     // Clear the input after saving if clearAfterSave is true
     if (clearAfterSave) {
+      hasSavedRef.current = true;
       setLocalValue('');
+      // Reset the flag after a short delay to allow future syncs if needed
+      setTimeout(() => {
+        hasSavedRef.current = false;
+      }, 1000);
     }
   }, [expenseId, localValue, onSave, clearAfterSave]);
 
