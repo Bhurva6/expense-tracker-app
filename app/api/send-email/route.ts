@@ -5,6 +5,20 @@ import nodemailer from 'nodemailer';
 const EMAIL_USER = process.env.GMAIL_USER || 'your-email@gmail.com';
 const EMAIL_PASS = process.env.GMAIL_APP_PASSWORD || 'your-app-password';
 
+// Helper function to format date/time in IST (Indian Standard Time)
+const formatDateIST = (date: Date = new Date()): string => {
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }) + ' IST';
+};
+
 // Admin email list
 const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
@@ -107,7 +121,7 @@ const getNewExpenseEmailTemplate = (expense: ExpenseData, isForAdmin: boolean = 
           ${expense.notes ? `<div style="margin: 15px 0;"><strong>Notes:</strong><div style="background: #e9ecef; padding: 10px; border-radius: 5px; margin-top: 5px;">${expense.notes}</div></div>` : ''}
           
           <div style="margin: 20px 0; padding: 10px; background: #d1ecf1; border-radius: 5px; border-left: 4px solid #bee5eb;">
-            <strong>Submitted:</strong> ${new Date().toLocaleString()}
+            <strong>Submitted:</strong> ${formatDateIST()}
           </div>
         </div>
 
@@ -172,7 +186,7 @@ const getStatusChangeEmailTemplate = (
           </table>
           
           <div style="margin: 20px 0; padding: 10px; background: #d1ecf1; border-radius: 5px; border-left: 4px solid #bee5eb;">
-            <strong>Status Changed:</strong> ${new Date().toLocaleString()}
+            <strong>Status Changed:</strong> ${formatDateIST()}
           </div>
 
           ${newStatus === 'Approve' ? 
@@ -239,7 +253,7 @@ const getExpenseClosedEmailTemplate = (
           </table>
           
           <div style="margin: 20px 0; padding: 10px; background: #d1ecf1; border-radius: 5px; border-left: 4px solid #bee5eb;">
-            <strong>Closed Date:</strong> ${new Date().toLocaleString()}
+            <strong>Closed Date:</strong> ${formatDateIST()}
           </div>
 
           <div style="margin: 15px 0; padding: 15px; background: #d4edda; border-radius: 5px; border-left: 4px solid #c3e6cb;">

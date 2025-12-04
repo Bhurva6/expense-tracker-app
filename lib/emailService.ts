@@ -181,7 +181,7 @@ export const sendTestEmail = async (testEmail: string) => {
         address: 'Test Location, Mumbai, Maharashtra, India',
         latitude: 19.0760,
         longitude: 72.8777,
-        timestamp: new Date().toLocaleString(),
+        timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
       },
     };
 

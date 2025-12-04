@@ -30,27 +30,19 @@ const RemarksInput = memo(function RemarksInput({
   clearAfterSave?: boolean;
 }) {
   const [localValue, setLocalValue] = useState('');
-  const hasSavedRef = React.useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Update local value if initialValue changes (e.g., after fetch)
-  // But skip if we just saved (to keep the field empty for new input)
-  useEffect(() => {
-    if (!hasSavedRef.current) {
-      setLocalValue(initialValue);
-    }
-  }, [initialValue]);
-
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!localValue.trim()) return; // Don't save empty remarks
-    onSave(expenseId, localValue);
-    // Clear the input after saving if clearAfterSave is true
-    if (clearAfterSave) {
-      hasSavedRef.current = true;
-      setLocalValue('');
-      // Reset the flag after a short delay to allow future syncs if needed
-      setTimeout(() => {
-        hasSavedRef.current = false;
-      }, 1000);
+    setIsSaving(true);
+    try {
+      await onSave(expenseId, localValue);
+      // Clear the input after saving if clearAfterSave is true
+      if (clearAfterSave) {
+        setLocalValue('');
+      }
+    } finally {
+      setIsSaving(false);
     }
   }, [expenseId, localValue, onSave, clearAfterSave]);
 
@@ -259,7 +251,7 @@ export default function AdminDashboard() {
 
   const handleRemarksChange = async (id: string, remarks: string) => {
     await updateDoc(doc(db, 'expenses', id), { remarks });
-    fetchExpenses();
+    await fetchExpenses();
   };
 
   const handleRemarksDraftChange = (id: string, value: string) => {
