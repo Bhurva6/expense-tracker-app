@@ -211,6 +211,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [siteNames, setSiteNames] = useState<string[]>([]);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
 
   // Cleanup effect
   React.useEffect(() => {
@@ -457,6 +458,47 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     captureLocation();
   }, []);
 
+  // Load draft data if editing
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const draftData = sessionStorage.getItem('draftExpenseData');
+    if (draftData) {
+      try {
+        const draft = JSON.parse(draftData);
+        // Populate form with draft data
+        setForm({
+          date: draft.date || new Date().toISOString().split('T')[0],
+          category: draft.category || "",
+          food: draft.food || [{ amount: "", description: "", files: [] }],
+          fuel: draft.fuel || [{ amount: "", description: "", files: [] }],
+          entertainment: draft.entertainment || [{ amount: "", description: "", files: [] }],
+          utility: draft.utility || [{ amount: "", description: "", files: [] }],
+          home: draft.home || [{ amount: "", description: "", files: [] }],
+          travel: draft.travel || [{ amount: "", description: "", files: [] }],
+          grocery: draft.grocery || [{ amount: "", description: "", files: [] }],
+          transport: draft.transport || [{ amount: "", description: "", files: [] }],
+          hotel: draft.hotel || [{ amount: "", description: "", files: [] }],
+          siteName: draft.siteName || "",
+          labour: draft.labour || [{ amount: "", description: "", files: [] }],
+          tools: draft.tools || [{ amount: "", description: "", files: [] }],
+          consumables: draft.consumables || [{ amount: "", description: "", files: [] }],
+          stay: draft.stay || [{ amount: "", description: "", files: [] }],
+          transportOfMaterial: draft.transportOfMaterial || [{ amount: "", description: "", files: [] }],
+          localCommute: draft.localCommute || [{ amount: "", description: "", files: [] }],
+          miscellaneous: draft.miscellaneous || [{ amount: "", description: "", files: [] }],
+          notes: draft.notes || "",
+          file: null,
+          others: draft.others || [{ label: "", amount: "", description: "", files: [] }],
+        });
+        // Clear sessionStorage after loading
+        sessionStorage.removeItem('draftExpenseData');
+      } catch (error) {
+        console.error('Error loading draft data:', error);
+      }
+    }
+  }, []);
+
   // Fetch existing site names
   useEffect(() => {
     const fetchSiteNames = async () => {
@@ -478,6 +520,99 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     };
     fetchSiteNames();
   }, []);
+
+  // Save draft to Firestore
+  const saveDraft = async () => {
+    try {
+      if (!user?.uid) {
+        safeSetState(() => setErrorMessage("User not authenticated. Please log in and try again."));
+        safeSetState(() => setShowErrorModal(true));
+        return;
+      }
+
+      safeSetState(() => setShowLoadingModal(true));
+
+      // Helper function to clean File objects from expense items
+      const cleanExpenseItems = (items: ExpenseItem[]) => {
+        return items.map(item => ({
+          amount: item.amount,
+          description: item.description,
+        }));
+      };
+
+      // Helper function to clean "others" items
+      const cleanOthersItems = (items: { label: string; amount: string; description: string; files: File[] }[]) => {
+        return items.map(item => ({
+          label: item.label,
+          amount: item.amount,
+          description: item.description,
+        }));
+      };
+
+      const draftData = {
+        date: form.date,
+        category: form.category,
+        notes: form.notes,
+        siteName: form.siteName,
+        food: cleanExpenseItems(form.food),
+        fuel: cleanExpenseItems(form.fuel),
+        entertainment: cleanExpenseItems(form.entertainment),
+        utility: cleanExpenseItems(form.utility),
+        home: cleanExpenseItems(form.home),
+        travel: cleanExpenseItems(form.travel),
+        grocery: cleanExpenseItems(form.grocery),
+        transport: cleanExpenseItems(form.transport),
+        hotel: cleanExpenseItems(form.hotel),
+        labour: cleanExpenseItems(form.labour),
+        tools: cleanExpenseItems(form.tools),
+        consumables: cleanExpenseItems(form.consumables),
+        stay: cleanExpenseItems(form.stay),
+        transportOfMaterial: cleanExpenseItems(form.transportOfMaterial),
+        localCommute: cleanExpenseItems(form.localCommute),
+        miscellaneous: cleanExpenseItems(form.miscellaneous),
+        others: cleanOthersItems(form.others),
+        total,
+        status: "Draft",
+        user: {
+          uid: user?.uid,
+          name: user?.displayName,
+          email: user?.email,
+        },
+        location: location || {
+          latitude: 0,
+          longitude: 0,
+          address: "Location not available",
+          timestamp: new Date().toLocaleString(),
+        },
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+
+      console.log("Saving expense as draft...");
+
+      const docRef = await addDoc(collection(db, "draftExpenses"), draftData);
+
+      console.log("Draft saved successfully with ID:", docRef.id);
+
+      safeSetState(() => setShowLoadingModal(false));
+      safeSetState(() => setShowSubmitModal(false));
+      safeSetState(() => setToastMessage("Expense saved as draft successfully"));
+      safeSetState(() => setShowToast(true));
+      setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+
+      // Delay before navigating to prevent state updates after unmount
+      setTimeout(() => {
+        if (mounted.current) {
+          router.push("/");
+        }
+      }, 2000);
+    } catch (err: any) {
+      console.error("Draft save error:", err);
+      safeSetState(() => setShowLoadingModal(false));
+      safeSetState(() => setErrorMessage(err.message || "Error saving draft"));
+      safeSetState(() => setShowErrorModal(true));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -501,13 +636,19 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       return;
     }
 
+    // Show the submit/draft modal
+    safeSetState(() => setShowSubmitModal(true));
+  };
+
+  const handleFinalSubmit = async () => {
     console.log("Starting expense submission...", { 
       category: form.category, 
       total, 
-      userUid: user.uid 
+      userUid: user?.uid 
     });
 
     safeSetState(() => setShowLoadingModal(true));
+    safeSetState(() => setShowSubmitModal(false));
     safeSetState(() => setError(""));
 
     const proofUrls: string[] = [];
@@ -2184,6 +2325,70 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           </form>
         </Card>
       </div>
+
+      {/* Success Modal */}
+      {/* Submit/Draft Confirmation Modal */}
+      {showSubmitModal && (
+        <Dialog
+          open={showSubmitModal}
+          onClose={() => safeSetState(() => setShowSubmitModal(false))}
+          className="fixed z-50 inset-0 flex items-center justify-center"
+        >
+          <div
+            className="fixed inset-0 bg-black bg-opacity-30"
+            aria-hidden="true"
+          />
+          <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-md w-full mx-4 z-10">
+            <Dialog.Title
+              className="text-xl font-semibold text-center mb-4"
+              style={{ color: "var(--primary)" }}
+            >
+              Save or Submit Expense
+            </Dialog.Title>
+            <Dialog.Description
+              className="text-center text-sm mb-6"
+              style={{ color: "var(--foreground)" }}
+            >
+              Would you like to save this expense as a draft or submit it for approval?
+            </Dialog.Description>
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={saveDraft}
+                className="w-full px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+                style={{
+                  background: "#f59e0b",
+                  color: "white",
+                  border: "2px solid #f59e0b",
+                }}
+              >
+                💾 Save as Draft
+              </Button>
+              <Button
+                onClick={handleFinalSubmit}
+                className="w-full px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+                style={{
+                  background: "var(--primary)",
+                  color: "var(--surface)",
+                  border: "2px solid var(--primary)",
+                }}
+              >
+                ✓ Submit for Approval
+              </Button>
+              <Button
+                onClick={() => safeSetState(() => setShowSubmitModal(false))}
+                className="w-full px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+                style={{
+                  background: "var(--surface)",
+                  color: "var(--foreground)",
+                  border: "2px solid var(--muted)",
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </Card>
+        </Dialog>
+      )}
 
       {/* Success Modal */}
       {showSuccessModal && (

@@ -1,11 +1,15 @@
 'use client';
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, Suspense } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { LanguageProvider, useLanguage, Language } from '../context/LanguageContext';
 import ExpenseForm from '../components/ExpenseForm';
 import ExpenseTable from '../components/ExpenseTable';
 import AdminDashboard from '../components/AdminDashboard';
 import Navbar from '../components/Navbar';
+import EmployeeProjects from '../components/EmployeeProjects';
+import ProjectExpenseForm from '../components/ProjectExpenseForm';
 
 const ADMIN_EMAILS = [
   'bhurvaxsharma.india@gmail.com',
@@ -29,9 +33,12 @@ const MOTIVATIONAL_QUOTES = [
   "Success doesn’t just find you. You have to go out and get it."
 ];
 
-function MainPage() {
+function MainPageContent() {
   const { user, loading, signIn, signInWithPhone, verifyOTP, signOutUser, confirmationResult, phoneSignInLoading, clearRecaptcha, updateDisplayName } = useAuth();
-  const [activeTab, setActiveTab] = useState<'add' | 'track' | 'admin'>('add');
+  const { language, setLanguage, t } = useLanguage();
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'add' | 'track' | 'admin' | 'project'>('add');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loginMethod, setLoginMethod] = useState<'google' | 'phone'>('google');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
@@ -42,6 +49,16 @@ function MainPage() {
   const randomQuote = useMemo(() => {
     return MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
   }, []);
+
+  // Check for project tab in URL params
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const projectId = searchParams.get('projectId');
+    if (tab === 'project' && projectId) {
+      setActiveTab('project');
+      setSelectedProjectId(projectId);
+    }
+  }, [searchParams]);
 
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) return; // Only allow single digit
@@ -61,10 +78,29 @@ function MainPage() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>{t('loading')}</div>;
   if (!user)
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        {/* Language Selector */}
+        <div className="absolute top-6 right-6">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            className="px-4 py-2 rounded border"
+            style={{ 
+              borderColor: 'var(--primary)',
+              background: 'var(--surface)',
+              color: 'var(--foreground)'
+            }}
+          >
+            <option value="en">{t('language_en')}</option>
+            <option value="hi">{t('language_hi')}</option>
+            <option value="mr">{t('language_mr')}</option>
+            <option value="gu">{t('language_gu')}</option>
+          </select>
+        </div>
+
         <Image
           src="/panache_green_logo.jpeg"
           alt="Panache Green Logo"
@@ -72,7 +108,7 @@ function MainPage() {
           height={150}
         />
         <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center" style={{ color: 'var(--primary)' }}>
-          Welcome to Panache Greens Employee Expense Tracker
+          {t('welcome_title')}
         </h1>
         <div className="flex gap-4 mb-4">
           <button
@@ -87,7 +123,7 @@ function MainPage() {
             className={`px-4 py-2 rounded ${loginMethod === 'google' ? 'text-white' : ''}`}
             style={{ background: loginMethod === 'google' ? 'var(--primary)' : 'var(--surface)', color: loginMethod === 'google' ? 'var(--surface)' : 'var(--foreground)' }}
           >
-            Google Sign In
+            {t('google_signin')}
           </button>
           <button
             onClick={() => {
@@ -101,12 +137,12 @@ function MainPage() {
             className={`px-4 py-2 rounded ${loginMethod === 'phone' ? 'text-white' : ''}`}
             style={{ background: loginMethod === 'phone' ? 'var(--primary)' : 'var(--surface)', color: loginMethod === 'phone' ? 'var(--surface)' : 'var(--foreground)' }}
           >
-            Phone Sign In
+            {t('phone_signin')}
           </button>
         </div>
         {loginMethod === 'google' && (
           <button onClick={signIn} className="text-white px-4 py-2 rounded" style={{ background: 'var(--primary)' }}>
-            Sign in with Google
+            {t('sign_in_google')}
           </button>
         )}
         {loginMethod === 'phone' && !showOtpInput && (
@@ -115,7 +151,7 @@ function MainPage() {
               <span className="px-2 py-2" style={{ background: 'var(--accent-light)' }}>+91</span>
               <input
                 type="tel"
-                placeholder="Enter 10-digit number"
+                placeholder={t('enter_phone')}
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 className="px-4 py-2 flex-1"
@@ -124,7 +160,7 @@ function MainPage() {
             </div>
             <input
               type="text"
-              placeholder="Enter your name"
+              placeholder={t('enter_name')}
               value={phoneName}
               onChange={(e) => setPhoneName(e.target.value)}
               className="px-4 py-2 border rounded"
@@ -136,14 +172,14 @@ function MainPage() {
                   await signInWithPhone('+91' + phoneNumber);
                   setShowOtpInput(true);
                 } catch (error) {
-                  alert('Error sending OTP. Please try again.');
+                  alert(t('error_sending_otp'));
                 }
               }}
               disabled={phoneSignInLoading || phoneNumber.length !== 10 || !phoneName.trim()}
               className="text-white px-4 py-2 rounded disabled:opacity-50"
               style={{ background: 'var(--primary)' }}
             >
-              {phoneSignInLoading ? 'Sending OTP...' : 'Send OTP'}
+              {phoneSignInLoading ? t('sending_otp') : t('send_otp')}
             </button>
           </div>
         )}
@@ -182,7 +218,7 @@ function MainPage() {
               className="text-white px-4 py-2 rounded disabled:opacity-50"
               style={{ background: 'var(--primary)' }}
             >
-              {phoneSignInLoading ? 'Verifying...' : 'Verify OTP'}
+              {phoneSignInLoading ? t('verifying') : t('verify_otp')}
             </button>
           </div>
         )}
@@ -195,31 +231,68 @@ function MainPage() {
   return (
     <div className="container mx-auto p-4">
       <Navbar user={user} isAdmin={isAdmin} signOutUser={signOutUser} showAdminButton={true} />
+      
+      {/* Employee Projects Section - Always visible for non-admins, above tabs */}
+      {!isAdmin && <EmployeeProjects onProjectClick={(projectId) => setSelectedProjectId(projectId)} />}
+      
       <div className="flex gap-4 mb-6 border-b pb-2">
         <button
           className={`px-4 py-2 rounded-t ${activeTab === 'add' ? 'text-white' : ''}`}
           style={{ background: activeTab === 'add' ? 'var(--primary)' : 'var(--surface)', color: activeTab === 'add' ? 'var(--surface)' : 'var(--foreground)' }}
-          onClick={() => setActiveTab('add')}
+          onClick={() => {
+            setActiveTab('add');
+            setSelectedProjectId(null);
+          }}
         >
-          Add New Expense
+          {t('add_new_expense')}
         </button>
         <button
           className={`px-4 py-2 rounded-t ${activeTab === 'track' ? 'text-white' : ''}`}
           style={{ background: activeTab === 'track' ? 'var(--primary)' : 'var(--surface)', color: activeTab === 'track' ? 'var(--surface)' : 'var(--foreground)' }}
-          onClick={() => setActiveTab('track')}
+          onClick={() => {
+            setActiveTab('track');
+            setSelectedProjectId(null);
+          }}
         >
-          Track My Expenses
+          {t('track_expenses')}
         </button>
         {isAdmin && (
           <button
             className={`px-4 py-2 rounded-t ${activeTab === 'admin' ? 'text-white' : ''}`}
             style={{ background: activeTab === 'admin' ? 'var(--accent)' : 'var(--surface)', color: activeTab === 'admin' ? 'var(--surface)' : 'var(--foreground)' }}
-            onClick={() => setActiveTab('admin')}
+            onClick={() => {
+              setActiveTab('admin');
+              setSelectedProjectId(null);
+            }}
           >
-            Admin Dashboard
+            {t('admin_dashboard')}
           </button>
         )}
       </div>
+      
+      {/* Project Expense Form - Shows when project is selected */}
+      {activeTab === 'project' && selectedProjectId && (
+        <div className="mb-6">
+          <button
+            onClick={() => {
+              setActiveTab('add');
+              setSelectedProjectId(null);
+            }}
+            className="mb-4 px-4 py-2 rounded text-white"
+            style={{ background: 'var(--primary)' }}
+          >
+            ← Back to Expenses
+          </button>
+          <ProjectExpenseForm 
+            projectId={selectedProjectId} 
+            onBack={() => {
+              setActiveTab('track');
+              setSelectedProjectId(null);
+            }} 
+          />
+        </div>
+      )}
+      
       {activeTab === 'add' && (
         <>
           <div className="mb-6 text-center text-lg italic text-gray-700" style={{ color: 'var(--primary)' }}>
@@ -236,8 +309,12 @@ function MainPage() {
 
 export default function Page() {
   return (
-    <AuthProvider>
-      <MainPage />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <Suspense fallback={<div>Loading...</div>}>
+          <MainPageContent />
+        </Suspense>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

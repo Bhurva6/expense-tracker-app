@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { sendStatusChangeNotification, sendExpenseClosedNotification } from '../lib/emailService';
 import EmailTestComponent from './EmailTestComponent';
 import { useRouter } from 'next/navigation';
+import ProjectManagement from './ProjectManagement';
 
 // Memoized Remarks Input Component to prevent re-renders while typing
 const RemarksInput = memo(function RemarksInput({ 
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isExpandedView, setIsExpandedView] = useState(true);
   const [showEmailTest, setShowEmailTest] = useState(false);
-  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'review', 'approve', 'accounts', 'access-control'
+  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'review', 'approve', 'accounts', 'access-control', 'projects'
   const [accessControlUsers, setAccessControlUsers] = useState<any[]>([]);
 
   // Fetch access control users from Firebase
@@ -2038,6 +2039,21 @@ export default function AdminDashboard() {
             </Button>
           )}
           
+          {/* Show Projects button only if user has admin access */}
+          {hasAdminAccess(user?.email || '') && (
+            <Button 
+              onClick={() => setActiveView('projects')} 
+              className="px-6 py-3 font-semibold text-sm rounded-lg transition-all duration-200 hover:shadow-lg"
+              style={{ 
+                background: activeView === 'projects' ? 'var(--primary)' : 'var(--surface)', 
+                color: activeView === 'projects' ? 'var(--surface)' : 'var(--foreground)',
+                border: activeView === 'projects' ? 'none' : '2px solid var(--primary)'
+              }}
+            >
+              📋 Projects
+            </Button>
+          )}
+          
           {/* Show Access Control button only if user has admin access */}
           {hasAdminAccess(user?.email || '') && (
             <Button 
@@ -2059,6 +2075,7 @@ export default function AdminDashboard() {
         {activeView === 'review' && hasAreaAccess(user?.email || '', 'review') && <ReviewComponent />}
         {activeView === 'approve' && hasAreaAccess(user?.email || '', 'approve') && <ApproveComponent />}
         {activeView === 'accounts' && hasAreaAccess(user?.email || '', 'accounts') && <AccountsComponent />}
+        {activeView === 'projects' && hasAdminAccess(user?.email || '') && <ProjectManagement />}
         {activeView === 'access-control' && hasAdminAccess(user?.email || '') && <AccessControlComponent />}
       </div>
 
