@@ -72,7 +72,7 @@ export default function ExpenseTable() {
         localCommute: draftData.localCommute || [],
         miscellaneous: draftData.miscellaneous || [],
         others: draftData.others || [],
-        billImages: [],
+        billImages: draftData.billImages || [], // Preserve uploaded attachments from draft
         total: draftData.total,
         status: "Under Review",
         isPersonal: false,
@@ -308,6 +308,7 @@ export default function ExpenseTable() {
                 <th className="px-4 py-2 text-left">Category</th>
                 <th className="px-4 py-2 text-right">Total</th>
                 <th className="px-4 py-2 text-center">Status</th>
+                <th className="px-4 py-2 text-center">Proof</th>
                 <th className="px-4 py-2 text-center rounded-tr-lg">Actions</th>
               </tr>
             </thead>
@@ -327,6 +328,24 @@ export default function ExpenseTable() {
                     >
                       Draft
                     </span>
+                  </td>
+                  <td className="px-4 py-2 align-top text-center">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {exp.billImages && exp.billImages.map((url: string, imgIdx: number) => (
+                        isImageUrl(url) ? (
+                          <a key={imgIdx} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt={`Proof ${imgIdx + 1}`} className="w-12 h-12 object-cover rounded border hover:scale-105 transition-transform" style={{ borderColor: 'var(--muted)' }} />
+                          </a>
+                        ) : (
+                          <a key={imgIdx} href={url} target="_blank" rel="noopener noreferrer" className="inline-block px-3 py-1 rounded shadow hover:bg-opacity-80 transition text-xs" style={{ background: '#8b5cf6', color: 'white' }}>
+                            📄 View
+                          </a>
+                        )
+                      ))}
+                      {(!exp.billImages || exp.billImages.length === 0) && (
+                        <span className="text-gray-400 text-xs">No attachments</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2 align-top rounded-r-lg text-center">
                     <div className="flex gap-2 justify-center flex-wrap">
@@ -589,6 +608,10 @@ export default function ExpenseTable() {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Date:</span>
                   <span className="font-semibold">{new Date(draftToSubmit.createdAt.seconds * 1000).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Attachments:</span>
+                  <span className="font-semibold">{draftToSubmit.billImages?.length || 0} file(s)</span>
                 </div>
               </div>
             )}

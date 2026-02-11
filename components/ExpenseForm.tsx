@@ -532,6 +532,101 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       safeSetState(() => setShowLoadingModal(true));
 
+      const proofUrls: string[] = [];
+
+      // Collect all files from form arrays
+      const allFiles = [
+        ...form.food.flatMap((item) => item.files),
+        ...form.fuel.flatMap((item) => item.files),
+        ...form.entertainment.flatMap((item) => item.files),
+        ...form.utility.flatMap((item) => item.files),
+        ...form.home.flatMap((item) => item.files),
+        ...form.travel.flatMap((item) => item.files),
+        ...form.grocery.flatMap((item) => item.files),
+        ...form.transport.flatMap((item) => item.files),
+        ...form.hotel.flatMap((item) => item.files),
+        ...form.labour.flatMap((item) => item.files),
+        ...form.tools.flatMap((item) => item.files),
+        ...form.consumables.flatMap((item) => item.files),
+        ...form.stay.flatMap((item) => item.files),
+        ...form.miscellaneous.flatMap((item) => item.files),
+        ...form.transportOfMaterial.flatMap((item) => item.files),
+        ...form.localCommute.flatMap((item) => item.files),
+        ...form.others.flatMap((item) => item.files),
+      ].filter(file => file && file.size > 0); // Filter out invalid or empty files
+
+      console.log(`Found ${allFiles.length} files to upload for draft`);
+
+      // Upload files if any exist
+      if (allFiles.length > 0) {
+        console.log(`Uploading ${allFiles.length} files for draft...`);
+        
+        const bucketName = "expenses";
+        
+        for (const proofFile of allFiles) {
+          if (!proofFile || !proofFile.name) {
+            console.warn('Skipping invalid file:', proofFile);
+            continue;
+          }
+
+          // Validate file size
+          if (proofFile.size > 10 * 1024 * 1024) { // 10MB limit
+            throw new Error(`File ${proofFile.name} is too large. Maximum size is 10MB.`);
+          }
+          
+          const sanitizedFileName = proofFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+          const filePath = `${user?.uid}/drafts/${Date.now()}_${sanitizedFileName}`;
+          
+          console.log(`Uploading file: ${proofFile.name} to bucket "${bucketName}", path: ${filePath}`);
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(filePath, proofFile, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            console.error('Upload error details:', {
+              message: uploadError.message,
+              name: uploadError.name,
+              cause: (uploadError as any).cause,
+              statusCode: (uploadError as any).statusCode
+            });
+            
+            // Provide more helpful error messages
+            if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket not found')) {
+              throw new Error(`Storage bucket "${bucketName}" not found. Please create a bucket named "${bucketName}" in your Supabase dashboard under Storage > New Bucket. Make sure to check "Public bucket".`);
+            } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy') || uploadError.message.includes('security') || uploadError.message.includes('violates')) {
+              throw new Error(`Upload permission denied. Go to Supabase Dashboard > Storage > ${bucketName} bucket > Policies tab, and add a policy that allows INSERT for "anon" and "authenticated" roles with policy definition: true`);
+            } else if (uploadError.message.includes('exceed') || uploadError.message.includes('size')) {
+              throw new Error(`File "${proofFile.name}" is too large. Please reduce the file size.`);
+            } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey')) {
+              throw new Error(`Invalid Supabase configuration. Please check your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.`);
+            }
+            
+            throw new Error(`Failed to upload file ${proofFile.name}: ${uploadError.message}`);
+          }
+
+          if (!uploadData) {
+            throw new Error(`Upload failed for file ${proofFile.name}: No upload data returned`);
+          }
+
+          const { data: urlData } = supabase.storage
+            .from(bucketName)
+            .getPublicUrl(filePath);
+            
+          if (!urlData?.publicUrl) {
+            throw new Error(`Failed to get public URL for file ${proofFile.name}`);
+          }
+          
+          proofUrls.push(urlData.publicUrl);
+          console.log(`Successfully uploaded: ${proofFile.name}`);
+        }
+        
+        console.log(`All files uploaded successfully for draft. URLs:`, proofUrls);
+      }
+
       // Helper function to clean File objects from expense items
       const cleanExpenseItems = (items: ExpenseItem[]) => {
         return items.map(item => ({
@@ -571,6 +666,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         localCommute: cleanExpenseItems(form.localCommute),
         miscellaneous: cleanExpenseItems(form.miscellaneous),
         others: cleanOthersItems(form.others),
+        billImages: proofUrls, // Include uploaded file URLs
         total,
         status: "Draft",
         user: {
