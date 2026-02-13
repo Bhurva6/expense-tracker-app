@@ -42,6 +42,7 @@ const FileUploadArea = ({
           e.preventDefault();
           e.stopPropagation();
           const droppedFiles = Array.from(e.dataTransfer.files);
+          console.log(`[${fieldName}] Files dropped:`, droppedFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
           setFiles([...files, ...droppedFiles]);
         }}
       >
@@ -52,7 +53,9 @@ const FileUploadArea = ({
           accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.rtf,.odt,.ods,.odp"
           onChange={(e) => {
             if (e.target.files?.length) {
-              setFiles([Array.from(e.target.files)[0]]);
+              const selectedFile = Array.from(e.target.files)[0];
+              console.log(`[${fieldName}] File selected:`, { name: selectedFile.name, size: selectedFile.size, type: selectedFile.type });
+              setFiles([selectedFile]);
             }
           }}
           className="hidden"
@@ -67,7 +70,10 @@ const FileUploadArea = ({
           </span>
           <button
             type="button"
-            onClick={() => setFiles([])}
+            onClick={() => {
+              console.log(`[${fieldName}] File removed`);
+              setFiles([]);
+            }}
             className="ml-1 text-red-500 hover:text-red-600"
           >
             <XMarkIcon className="w-4 h-4" />
@@ -84,7 +90,9 @@ const FileUploadArea = ({
             accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.rtf,.odt,.ods,.odp"
             onChange={(e) => {
               if (e.target.files?.length) {
-                setFiles([Array.from(e.target.files)[0]]);
+                const selectedFile = Array.from(e.target.files)[0];
+                console.log(`[${fieldName}] File replaced:`, { name: selectedFile.name, size: selectedFile.size, type: selectedFile.type });
+                setFiles([selectedFile]);
               }
             }}
             className="hidden"
@@ -782,8 +790,30 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     safeSetState(() => setError(""));
 
     const proofUrls: string[] = [];
+    let uploadErrors: string[] = [];
 
     try {
+      // First, verify Supabase connection
+      console.log("Verifying Supabase connection...");
+      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+      
+      if (listError) {
+        console.error("Supabase connection error:", listError);
+        throw new Error(`Cannot connect to storage service: ${listError.message}. Please check your internet connection.`);
+      }
+      
+      console.log("Available buckets:", buckets?.map(b => b.name));
+      
+      const bucketName = "expenses";
+      const bucketExists = buckets?.some(b => b.name === bucketName);
+      
+      if (!bucketExists) {
+        console.error(`Bucket "${bucketName}" not found. Available buckets:`, buckets?.map(b => b.name));
+        throw new Error(`Storage bucket "${bucketName}" does not exist. Please create it in your Supabase dashboard (Storage > New Bucket > name it "expenses" > check "Public bucket").`);
+      }
+      
+      console.log(`Bucket "${bucketName}" found, proceeding with upload...`);
+
       // Collect all files from form arrays
       const allFiles = [
         ...form.food.flatMap((item) => item.files),
@@ -828,8 +858,6 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       if (allFiles.length > 0) {
         console.log(`Uploading ${allFiles.length} files...`);
-        
-        const bucketName = "expenses";
         
         for (const proofFile of allFiles) {
           if (!proofFile || !proofFile.name) {
@@ -876,37 +904,63 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               message: uploadError.message,
               name: uploadError.name,
               cause: (uploadError as any).cause,
-              statusCode: (uploadError as any).statusCode
+              statusCode: (uploadError as any).statusCode,
+              stack: (uploadError as any).stack
             });
             
-            // Provide more helpful error messages
-            let errorMsg = `Failed to upload file ${proofFile.name}: ${uploadError.message}`;
+            // Provide more helpful error messages based on the actual error
+            let errorMsg = `Upload failed: ${uploadError.message}`;
+            let errorDetails = "";
             
             if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket not found')) {
-              errorMsg = `Storage bucket "${bucketName}" not found. Please check SUPABASE_STORAGE_SETUP.md for setup instructions.`;
-            } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy') || uploadError.message.includes('security') || uploadError.message.includes('violates')) {
-              errorMsg = `Upload permission denied. Please check SUPABASE_STORAGE_SETUP.md for policy configuration.`;
-            } else if (uploadError.message.includes('exceed') || uploadError.message.includes('size')) {
-              errorMsg = `File "${proofFile.name}" is too large. Please reduce the file size.`;
-            } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey')) {
-              errorMsg = `Invalid Supabase configuration. Please check your environment variables.`;
+              errorMsg = `Storage bucket "${bucketName}" not found.`;
+              errorDetails = "Go to Supabase Dashboard > Storage > Create a bucket named 'expenses' (check 'Public bucket').";
+            } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy') || uploadError.message.includes('security') || uploadError.message.includes('violates') || uploadError.message.includes('new row violates')) {
+              errorMsg = `Permission denied when uploading "${proofFile.name}".`;
+              errorDetails = "Go to Supabase Dashboard > Storage > expenses bucket > Policies > Add a policy: Operation=INSERT, Target roles=anon,authenticated, Policy definition=true";
+            } else if (uploadError.message.includes('exceed') || uploadError.message.includes('size') || uploadError.message.includes('too large')) {
+              errorMsg = `File "${proofFile.name}" is too large (${(proofFile.size / 1024 / 1024).toFixed(2)}MB).`;
+              errorDetails = "Maximum file size is 10MB. Please compress or resize your file.";
+            } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey') || uploadError.message.includes('JWT')) {
+              errorMsg = `Authentication error.`;
+              errorDetails = "Check your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local";
+            } else if (uploadError.message.includes('network') || uploadError.message.includes('fetch') || uploadError.message.includes('Failed to fetch')) {
+              errorMsg = `Network error while uploading.`;
+              errorDetails = "Please check your internet connection and try again.";
+            } else if (uploadError.message.includes('Duplicate')) {
+              errorMsg = `A file with this name already exists.`;
+              errorDetails = "The file was uploaded previously. Try renaming the file.";
             }
+            
+            const fullErrorMsg = errorDetails ? `${errorMsg}\n\n${errorDetails}` : errorMsg;
+            uploadErrors.push(fullErrorMsg);
             
             // Ask user if they want to continue without this attachment
             const continueWithoutAttachment = window.confirm(
-              `${errorMsg}\n\nDo you want to continue submitting the expense without this attachment?`
+              `${fullErrorMsg}\n\nDo you want to continue submitting the expense without this attachment?`
             );
             
             if (continueWithoutAttachment) {
               console.log(`Skipping file ${proofFile.name} and continuing...`);
               continue; // Skip this file and continue with others
             } else {
-              throw new Error(errorMsg);
+              throw new Error(fullErrorMsg);
             }
           }
 
           if (!uploadData) {
-            throw new Error(`Upload failed for file ${proofFile.name}: No upload data returned`);
+            const noDataError = `Upload completed but no data returned for "${proofFile.name}". This usually means the file was not saved properly.`;
+            uploadErrors.push(noDataError);
+            
+            const continueWithoutAttachment = window.confirm(
+              `${noDataError}\n\nDo you want to continue submitting the expense without this attachment?`
+            );
+            
+            if (continueWithoutAttachment) {
+              continue;
+            } else {
+              throw new Error(noDataError);
+            }
           }
 
           const { data: urlData } = supabase.storage
@@ -918,10 +972,13 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           }
           
           proofUrls.push(urlData.publicUrl);
-          console.log(`Successfully uploaded: ${proofFile.name}`);
+          console.log(`Successfully uploaded: ${proofFile.name} -> ${urlData.publicUrl}`);
         }
         
-        console.log(`All files uploaded successfully. URLs:`, proofUrls);
+        if (uploadErrors.length > 0) {
+          console.warn(`Completed with ${uploadErrors.length} upload warnings:`, uploadErrors);
+        }
+        console.log(`Upload complete. ${proofUrls.length} files uploaded successfully.`);
       }
 
       console.log("Preparing expense data for Firestore...");
@@ -2709,26 +2766,45 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             aria-hidden="true"
             onClick={closeErrorModal}
           />
-          <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-md w-full mx-4 z-10">
+          <Card className="relative p-6 sm:p-8 rounded-lg shadow-lg max-w-lg w-full mx-4 z-10">
             <Dialog.Title
               className="text-xl font-semibold text-center mb-4"
-              style={{ color: "var(--accent)" }}
+              style={{ color: "#ef4444" }}
             >
-              ❌ Submission Failed
+              ❌ Error
             </Dialog.Title>
-            <Dialog.Description
-              className="text-center text-sm mb-4"
-              style={{ color: "var(--foreground)" }}
+            <div 
+              className="mb-4 p-4 rounded-lg text-sm overflow-auto max-h-64"
+              style={{ 
+                background: "rgba(239, 68, 68, 0.1)", 
+                color: "var(--foreground)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word"
+              }}
             >
               {errorMessage}
-            </Dialog.Description>
-            <div className="flex justify-center">
+            </div>
+            <div className="flex gap-3">
               <Button
                 onClick={closeErrorModal}
-                className="w-full sm:w-auto"
-                style={{ background: "var(--accent)", color: "var(--surface)" }}
+                className="flex-1"
+                style={{ background: "var(--primary)", color: "var(--surface)" }}
               >
                 Try Again
+              </Button>
+              <Button
+                onClick={() => {
+                  navigator.clipboard.writeText(errorMessage);
+                  alert("Error copied to clipboard");
+                }}
+                className="flex-1"
+                style={{ 
+                  background: "var(--surface)", 
+                  color: "var(--foreground)",
+                  border: "2px solid var(--muted)"
+                }}
+              >
+                Copy Error
               </Button>
             </div>
           </Card>
