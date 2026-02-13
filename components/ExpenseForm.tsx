@@ -579,11 +579,33 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           
           console.log(`Uploading file: ${proofFile.name} to bucket "${bucketName}", path: ${filePath}`);
           
+          // Determine content type - use file type or infer from extension
+          let contentType = proofFile.type;
+          if (!contentType || contentType === 'application/octet-stream') {
+            const ext = proofFile.name.split('.').pop()?.toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              'jpg': 'image/jpeg',
+              'jpeg': 'image/jpeg',
+              'png': 'image/png',
+              'gif': 'image/gif',
+              'webp': 'image/webp',
+              'pdf': 'application/pdf',
+              'doc': 'application/msword',
+              'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'xls': 'application/vnd.ms-excel',
+              'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'txt': 'text/plain',
+              'csv': 'text/csv',
+            };
+            contentType = mimeTypes[ext || ''] || 'application/octet-stream';
+          }
+          
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from(bucketName)
             .upload(filePath, proofFile, {
               cacheControl: '3600',
-              upsert: false
+              upsert: false,
+              contentType: contentType
             });
 
           if (uploadError) {
@@ -595,17 +617,29 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             });
             
             // Provide more helpful error messages
+            let errorMsg = `Failed to upload file ${proofFile.name}: ${uploadError.message}`;
+            
             if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket not found')) {
-              throw new Error(`Storage bucket "${bucketName}" not found. Please create a bucket named "${bucketName}" in your Supabase dashboard under Storage > New Bucket. Make sure to check "Public bucket".`);
+              errorMsg = `Storage bucket "${bucketName}" not found. Please check SUPABASE_STORAGE_SETUP.md for setup instructions.`;
             } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy') || uploadError.message.includes('security') || uploadError.message.includes('violates')) {
-              throw new Error(`Upload permission denied. Go to Supabase Dashboard > Storage > ${bucketName} bucket > Policies tab, and add a policy that allows INSERT for "anon" and "authenticated" roles with policy definition: true`);
+              errorMsg = `Upload permission denied. Please check SUPABASE_STORAGE_SETUP.md for policy configuration.`;
             } else if (uploadError.message.includes('exceed') || uploadError.message.includes('size')) {
-              throw new Error(`File "${proofFile.name}" is too large. Please reduce the file size.`);
+              errorMsg = `File "${proofFile.name}" is too large. Please reduce the file size.`;
             } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey')) {
-              throw new Error(`Invalid Supabase configuration. Please check your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.`);
+              errorMsg = `Invalid Supabase configuration. Please check your environment variables.`;
             }
             
-            throw new Error(`Failed to upload file ${proofFile.name}: ${uploadError.message}`);
+            // Ask user if they want to continue without this attachment
+            const continueWithoutAttachment = window.confirm(
+              `${errorMsg}\n\nDo you want to continue saving the draft without this attachment?`
+            );
+            
+            if (continueWithoutAttachment) {
+              console.log(`Skipping file ${proofFile.name} and continuing...`);
+              continue; // Skip this file and continue with others
+            } else {
+              throw new Error(errorMsg);
+            }
           }
 
           if (!uploadData) {
@@ -808,11 +842,33 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           
           console.log(`Uploading file: ${proofFile.name} to bucket "${bucketName}", path: ${filePath}`);
           
+          // Determine content type - use file type or infer from extension
+          let contentType = proofFile.type;
+          if (!contentType || contentType === 'application/octet-stream') {
+            const ext = proofFile.name.split('.').pop()?.toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              'jpg': 'image/jpeg',
+              'jpeg': 'image/jpeg',
+              'png': 'image/png',
+              'gif': 'image/gif',
+              'webp': 'image/webp',
+              'pdf': 'application/pdf',
+              'doc': 'application/msword',
+              'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'xls': 'application/vnd.ms-excel',
+              'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'txt': 'text/plain',
+              'csv': 'text/csv',
+            };
+            contentType = mimeTypes[ext || ''] || 'application/octet-stream';
+          }
+          
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from(bucketName)
             .upload(filePath, proofFile, {
               cacheControl: '3600',
-              upsert: false
+              upsert: false,
+              contentType: contentType
             });
 
           if (uploadError) {
@@ -824,17 +880,29 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             });
             
             // Provide more helpful error messages
+            let errorMsg = `Failed to upload file ${proofFile.name}: ${uploadError.message}`;
+            
             if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket not found')) {
-              throw new Error(`Storage bucket "${bucketName}" not found. Please create a bucket named "${bucketName}" in your Supabase dashboard under Storage > New Bucket. Make sure to check "Public bucket".`);
+              errorMsg = `Storage bucket "${bucketName}" not found. Please check SUPABASE_STORAGE_SETUP.md for setup instructions.`;
             } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy') || uploadError.message.includes('security') || uploadError.message.includes('violates')) {
-              throw new Error(`Upload permission denied. Go to Supabase Dashboard > Storage > ${bucketName} bucket > Policies tab, and add a policy that allows INSERT for "anon" and "authenticated" roles with policy definition: true`);
+              errorMsg = `Upload permission denied. Please check SUPABASE_STORAGE_SETUP.md for policy configuration.`;
             } else if (uploadError.message.includes('exceed') || uploadError.message.includes('size')) {
-              throw new Error(`File "${proofFile.name}" is too large. Please reduce the file size.`);
+              errorMsg = `File "${proofFile.name}" is too large. Please reduce the file size.`;
             } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey')) {
-              throw new Error(`Invalid Supabase configuration. Please check your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.`);
+              errorMsg = `Invalid Supabase configuration. Please check your environment variables.`;
             }
             
-            throw new Error(`Failed to upload file ${proofFile.name}: ${uploadError.message}`);
+            // Ask user if they want to continue without this attachment
+            const continueWithoutAttachment = window.confirm(
+              `${errorMsg}\n\nDo you want to continue submitting the expense without this attachment?`
+            );
+            
+            if (continueWithoutAttachment) {
+              console.log(`Skipping file ${proofFile.name} and continuing...`);
+              continue; // Skip this file and continue with others
+            } else {
+              throw new Error(errorMsg);
+            }
           }
 
           if (!uploadData) {
@@ -1196,19 +1264,48 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     safeSetState(() => setError(""));
 
     let billImageUrls: string[] = [];
+    const bucketName = "expenses";
+    
     try {
       for (const file of billImages) {
-        const filePath = `expense-bills/${user?.uid}/${Date.now()}_${
-          file.name
-        }`;
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const filePath = `${user?.uid}/bills/${Date.now()}_${sanitizedFileName}`;
+        
+        // Determine content type
+        let contentType = file.type;
+        if (!contentType || contentType === 'application/octet-stream') {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          const mimeTypes: Record<string, string> = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'pdf': 'application/pdf',
+          };
+          contentType = mimeTypes[ext || ''] || 'application/octet-stream';
+        }
+        
         const { error: uploadError } = await supabase.storage
-          .from("expense-bills")
-          .upload(filePath, file);
+          .from(bucketName)
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: contentType
+          });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Bill upload error:', uploadError);
+          if (uploadError.message.includes('not found') || uploadError.message.includes('Bucket not found')) {
+            throw new Error(`Storage bucket "${bucketName}" not found. Please create a bucket named "${bucketName}" in your Supabase dashboard.`);
+          } else if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy')) {
+            throw new Error(`Upload permission denied. Please check your Supabase storage policies.`);
+          }
+          throw uploadError;
+        }
 
         const { data } = supabase.storage
-          .from("expense-bills")
+          .from(bucketName)
           .getPublicUrl(filePath);
         billImageUrls.push(data.publicUrl);
       }
