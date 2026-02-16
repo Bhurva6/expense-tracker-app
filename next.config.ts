@@ -51,6 +51,12 @@ const withPWA = require('next-pwa')({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Empty turbopack config to silence the warning
+  turbopack: {},
+  // Use system TLS certs for Google Fonts fetching
+  experimental: {
+    turbopackUseSystemTlsCerts: true,
+  },
 };
 
 export default withPWA(nextConfig);
