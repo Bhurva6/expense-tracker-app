@@ -220,6 +220,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const [toastMessage, setToastMessage] = useState("");
   const [siteNames, setSiteNames] = useState<string[]>([]);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [existingBillImages, setExistingBillImages] = useState<string[]>([]);
 
   // Cleanup effect
   React.useEffect(() => {
@@ -474,31 +476,65 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     if (draftData) {
       try {
         const draft = JSON.parse(draftData);
+        
+        // Store the draft ID for updating
+        if (draft.id) {
+          setEditingDraftId(draft.id);
+        }
+        
+        // Store existing bill images
+        if (draft.billImages && draft.billImages.length > 0) {
+          setExistingBillImages(draft.billImages);
+        }
+        
+        // Helper to ensure items have the correct structure with files array
+        const ensureItemStructure = (items: any[]) => {
+          if (!items || !Array.isArray(items) || items.length === 0) {
+            return [{ amount: "", description: "", files: [] }];
+          }
+          return items.map(item => ({
+            amount: item.amount || "",
+            description: item.description || "",
+            files: [] // Files can't be restored from storage, user needs to re-upload if needed
+          }));
+        };
+        
         // Populate form with draft data
         setForm({
           date: draft.date || new Date().toISOString().split('T')[0],
           category: draft.category || "",
-          food: draft.food || [{ amount: "", description: "", files: [] }],
-          fuel: draft.fuel || [{ amount: "", description: "", files: [] }],
-          entertainment: draft.entertainment || [{ amount: "", description: "", files: [] }],
-          utility: draft.utility || [{ amount: "", description: "", files: [] }],
-          home: draft.home || [{ amount: "", description: "", files: [] }],
-          travel: draft.travel || [{ amount: "", description: "", files: [] }],
-          grocery: draft.grocery || [{ amount: "", description: "", files: [] }],
-          transport: draft.transport || [{ amount: "", description: "", files: [] }],
-          hotel: draft.hotel || [{ amount: "", description: "", files: [] }],
+          food: ensureItemStructure(draft.food),
+          fuel: ensureItemStructure(draft.fuel),
+          entertainment: ensureItemStructure(draft.entertainment),
+          utility: ensureItemStructure(draft.utility),
+          home: ensureItemStructure(draft.home),
+          travel: ensureItemStructure(draft.travel),
+          grocery: ensureItemStructure(draft.grocery),
+          transport: ensureItemStructure(draft.transport),
+          hotel: ensureItemStructure(draft.hotel),
           siteName: draft.siteName || "",
-          labour: draft.labour || [{ amount: "", description: "", files: [] }],
-          tools: draft.tools || [{ amount: "", description: "", files: [] }],
-          consumables: draft.consumables || [{ amount: "", description: "", files: [] }],
-          stay: draft.stay || [{ amount: "", description: "", files: [] }],
-          transportOfMaterial: draft.transportOfMaterial || [{ amount: "", description: "", files: [] }],
-          localCommute: draft.localCommute || [{ amount: "", description: "", files: [] }],
-          miscellaneous: draft.miscellaneous || [{ amount: "", description: "", files: [] }],
+          labour: ensureItemStructure(draft.labour),
+          tools: ensureItemStructure(draft.tools),
+          consumables: ensureItemStructure(draft.consumables),
+          stay: ensureItemStructure(draft.stay),
+          transportOfMaterial: ensureItemStructure(draft.transportOfMaterial),
+          localCommute: ensureItemStructure(draft.localCommute),
+          miscellaneous: ensureItemStructure(draft.miscellaneous),
           notes: draft.notes || "",
           file: null,
-          others: draft.others || [{ label: "", amount: "", description: "", files: [] }],
+          others: draft.others?.map((item: any) => ({
+            label: item.label || "",
+            amount: item.amount || "",
+            description: item.description || "",
+            files: []
+          })) || [{ label: "", amount: "", description: "", files: [] }],
         });
+        
+        // Show toast that draft was loaded
+        safeSetState(() => setToastMessage("Draft loaded for editing"));
+        safeSetState(() => setShowToast(true));
+        setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+        
         // Clear sessionStorage after loading
         sessionStorage.removeItem('draftExpenseData');
       } catch (error) {
@@ -708,7 +744,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         localCommute: cleanExpenseItems(form.localCommute),
         miscellaneous: cleanExpenseItems(form.miscellaneous),
         others: cleanOthersItems(form.others),
-        billImages: proofUrls, // Include uploaded file URLs
+        // Combine existing images with newly uploaded ones
+        billImages: [...existingBillImages, ...proofUrls],
         total,
         status: "Draft",
         user: {
@@ -722,21 +759,38 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
           address: "Location not available",
           timestamp: new Date().toLocaleString(),
         },
-        createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
 
-      console.log("Saving expense as draft...");
+      let savedDraftId: string;
 
-      const docRef = await addDoc(collection(db, "draftExpenses"), draftData);
-
-      console.log("Draft saved successfully with ID:", docRef.id);
+      // If editing an existing draft, update it; otherwise create new
+      if (editingDraftId) {
+        console.log("Updating existing draft:", editingDraftId);
+        const { doc, updateDoc } = await import('firebase/firestore');
+        const draftRef = doc(db, "draftExpenses", editingDraftId);
+        await updateDoc(draftRef, draftData);
+        savedDraftId = editingDraftId;
+        console.log("Draft updated successfully");
+      } else {
+        console.log("Creating new draft...");
+        const docRef = await addDoc(collection(db, "draftExpenses"), {
+          ...draftData,
+          createdAt: Timestamp.now(),
+        });
+        savedDraftId = docRef.id;
+        console.log("Draft saved successfully with ID:", savedDraftId);
+      }
 
       safeSetState(() => setShowLoadingModal(false));
       safeSetState(() => setShowSubmitModal(false));
-      safeSetState(() => setToastMessage("Expense saved as draft successfully"));
+      safeSetState(() => setToastMessage(editingDraftId ? "Draft updated successfully" : "Expense saved as draft successfully"));
       safeSetState(() => setShowToast(true));
       setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+      
+      // Clear editing state
+      setEditingDraftId(null);
+      setExistingBillImages([]);
 
       // Delay before navigating to prevent state updates after unmount
       setTimeout(() => {
@@ -1063,8 +1117,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         localCommute: cleanExpenseItems(form.localCommute),
         miscellaneous: cleanExpenseItems(form.miscellaneous),
         others: cleanOthersItems(form.others),
-        // Add metadata
-        billImages: proofUrls,
+        // Add metadata - combine existing images with newly uploaded ones
+        billImages: [...existingBillImages, ...proofUrls],
         total,
         status: isPersonalExpense ? "Personal Tracking" : "Under Review",
         isPersonal: isPersonalExpense,
@@ -1174,6 +1228,21 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         safeSetState(() => setToastMessage("Personal expense saved to your tracking"));
         safeSetState(() => setShowToast(true));
         setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
+      }
+
+      // If this was a draft being submitted, delete the draft
+      if (editingDraftId) {
+        try {
+          console.log("Deleting submitted draft:", editingDraftId);
+          const { doc, deleteDoc } = await import('firebase/firestore');
+          const draftRef = doc(db, "draftExpenses", editingDraftId);
+          await deleteDoc(draftRef);
+          console.log("Draft deleted successfully");
+          setEditingDraftId(null);
+          setExistingBillImages([]);
+        } catch (deleteError) {
+          console.warn("Failed to delete draft (expense still saved):", deleteError);
+        }
       }
 
       safeSetState(() => setShowLoadingModal(false));
@@ -1481,11 +1550,50 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
         <Card className="p-4 sm:p-6 w-full">
           <form onSubmit={handleSubmit} className="space-y-4">
            <h1 className="text-2xl font-bold" style={{ color: "var(--primary)" }}>
-            Enter your expense
+            {editingDraftId ? "Edit Draft Expense" : "Enter your expense"}
            </h1>
+           {editingDraftId && (
+              <div className="text-sm text-blue-600 mb-2 flex items-center gap-2">
+                ✏️ Editing draft - make changes and save or submit
+              </div>
+           )}
            {location && (
               <div className="text-sm text-gray-600 mb-6">
                 📍 {location.address.split(",").slice(1, 3).join(", ")}
+              </div>
+           )}
+           
+           {/* Show existing attachments when editing */}
+           {existingBillImages.length > 0 && (
+              <div className="mb-4 p-3 rounded-lg" style={{ background: "var(--muted)", opacity: 0.9 }}>
+                <div className="text-sm font-medium mb-2">Existing Attachments ({existingBillImages.length}):</div>
+                <div className="flex flex-wrap gap-2">
+                  {existingBillImages.map((url, idx) => (
+                    <div key={idx} className="relative group">
+                      <a 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 underline hover:text-blue-800"
+                      >
+                        📎 Attachment {idx + 1}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExistingBillImages(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="ml-1 text-red-500 hover:text-red-700 text-xs"
+                        title="Remove attachment"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  You can add more attachments below. Click ✕ to remove existing ones.
+                </div>
               </div>
            )}
 
