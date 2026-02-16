@@ -793,23 +793,59 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     let uploadErrors: string[] = [];
 
     try {
-      // First, verify Supabase connection
-      console.log("Verifying Supabase connection...");
-      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+      const bucketName = "expenses";
       
-      if (listError) {
-        console.error("Supabase connection error:", listError);
-        throw new Error(`Cannot connect to storage service: ${listError.message}. Please check your internet connection.`);
+      // First, verify Supabase connection with better error handling
+      console.log("Verifying Supabase connection...");
+      let buckets;
+      try {
+        const { data, error: listError } = await supabase.storage.listBuckets();
+        
+        if (listError) {
+          console.error("Supabase connection error:", listError);
+          throw new Error(`Cannot connect to storage service: ${listError.message}`);
+        }
+        buckets = data;
+      } catch (connectionError: any) {
+        console.error("Supabase connection failed:", connectionError);
+        
+        // Check for specific network errors
+        if (connectionError.message?.includes('Failed to fetch') || 
+            connectionError.message?.includes('ERR_NAME_NOT_RESOLVED') ||
+            connectionError.message?.includes('NetworkError') ||
+            connectionError.message?.includes('fetch')) {
+          throw new Error(
+            `⚠️ Cannot connect to Supabase storage service.\n\n` +
+            `This usually means:\n` +
+            `1. Your Supabase project may be PAUSED (free tier pauses after 1 week of inactivity)\n` +
+            `2. The Supabase project URL may be incorrect\n` +
+            `3. Your internet connection may be down\n\n` +
+            `To fix:\n` +
+            `• Go to supabase.com/dashboard\n` +
+            `• Check if your project exists and is active\n` +
+            `• If paused, click "Restore project"\n` +
+            `• If project doesn't exist, create a new one and update your environment variables`
+          );
+        }
+        throw connectionError;
       }
       
       console.log("Available buckets:", buckets?.map(b => b.name));
       
-      const bucketName = "expenses";
       const bucketExists = buckets?.some(b => b.name === bucketName);
       
       if (!bucketExists) {
         console.error(`Bucket "${bucketName}" not found. Available buckets:`, buckets?.map(b => b.name));
-        throw new Error(`Storage bucket "${bucketName}" does not exist. Please create it in your Supabase dashboard (Storage > New Bucket > name it "expenses" > check "Public bucket").`);
+        throw new Error(
+          `Storage bucket "${bucketName}" does not exist.\n\n` +
+          `To fix:\n` +
+          `1. Go to supabase.com/dashboard\n` +
+          `2. Select your project\n` +
+          `3. Go to Storage > New Bucket\n` +
+          `4. Name it "expenses"\n` +
+          `5. Check "Public bucket"\n` +
+          `6. Click Create`
+        );
       }
       
       console.log(`Bucket "${bucketName}" found, proceeding with upload...`);
@@ -924,9 +960,9 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             } else if (uploadError.message.includes('Invalid key') || uploadError.message.includes('apikey') || uploadError.message.includes('JWT')) {
               errorMsg = `Authentication error.`;
               errorDetails = "Check your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local";
-            } else if (uploadError.message.includes('network') || uploadError.message.includes('fetch') || uploadError.message.includes('Failed to fetch')) {
-              errorMsg = `Network error while uploading.`;
-              errorDetails = "Please check your internet connection and try again.";
+            } else if (uploadError.message.includes('network') || uploadError.message.includes('fetch') || uploadError.message.includes('Failed to fetch') || uploadError.message.includes('ERR_NAME_NOT_RESOLVED')) {
+              errorMsg = `Cannot connect to storage service.`;
+              errorDetails = "Your Supabase project may be PAUSED or unavailable. Go to supabase.com/dashboard to check if your project is active. Free tier projects pause after 1 week of inactivity.";
             } else if (uploadError.message.includes('Duplicate')) {
               errorMsg = `A file with this name already exists.`;
               errorDetails = "The file was uploaded previously. Try renaming the file.";
@@ -1173,12 +1209,19 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       
       let errorMsg = "Error submitting expense";
       if (err.message) {
-        if (err.message.includes("Failed to upload file")) {
-          errorMsg = `File upload failed: ${err.message}`;
-        } else if (err.message.includes("storage")) {
-          errorMsg = "File storage error. Please try again or contact support.";
+        // Check for network/connection errors first (most common issue)
+        if (err.message.includes("Failed to fetch") || 
+            err.message.includes("ERR_NAME_NOT_RESOLVED") ||
+            err.message.includes("NetworkError") ||
+            err.message.includes("Cannot connect to")) {
+          // Use the detailed error message we created
+          errorMsg = err.message;
+        } else if (err.message.includes("Failed to upload file")) {
+          errorMsg = err.message;
+        } else if (err.message.includes("storage") || err.message.includes("bucket")) {
+          errorMsg = err.message;
         } else if (err.message.includes("network") || err.message.includes("fetch")) {
-          errorMsg = "Network error. Please check your connection and try again.";
+          errorMsg = `Network error: ${err.message}\n\nPlease check your internet connection and try again.`;
         } else {
           errorMsg = err.message;
         }
