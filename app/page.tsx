@@ -54,9 +54,16 @@ function MainPageContent() {
   useEffect(() => {
     const tab = searchParams.get('tab');
     const projectId = searchParams.get('projectId');
+    const editDraft = searchParams.get('editDraft');
+    
     if (tab === 'project' && projectId) {
       setActiveTab('project');
       setSelectedProjectId(projectId);
+    } else if (editDraft) {
+      // When editing a draft, switch to the 'add' tab
+      setActiveTab('add');
+      // Scroll to top to ensure the form is visible
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [searchParams]);
 

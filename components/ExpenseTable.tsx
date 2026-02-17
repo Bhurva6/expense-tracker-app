@@ -112,8 +112,10 @@ export default function ExpenseTable() {
 
   // Edit draft - navigate to form with draft data
   const handleEditDraft = (draft: any) => {
+    console.log('Edit draft clicked:', draft);
     // Store draft data in sessionStorage to pre-populate form
     sessionStorage.setItem('draftExpenseData', JSON.stringify(draft));
+    console.log('Draft data stored in sessionStorage');
     router.push('/?editDraft=' + draft.id);
   };
 

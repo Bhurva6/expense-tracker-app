@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -476,15 +477,18 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
     if (draftData) {
       try {
         const draft = JSON.parse(draftData);
+        console.log('Loading draft for editing:', draft);
         
         // Store the draft ID for updating
         if (draft.id) {
           setEditingDraftId(draft.id);
+          console.log('Set editing draft ID:', draft.id);
         }
         
         // Store existing bill images
         if (draft.billImages && draft.billImages.length > 0) {
           setExistingBillImages(draft.billImages);
+          console.log('Loaded existing bill images:', draft.billImages.length);
         }
         
         // Helper to ensure items have the correct structure with files array
@@ -529,6 +533,8 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
             files: []
           })) || [{ label: "", amount: "", description: "", files: [] }],
         });
+        
+        console.log('Draft form data loaded successfully');
         
         // Show toast that draft was loaded
         safeSetState(() => setToastMessage("Draft loaded for editing"));
@@ -2721,7 +2727,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               disabled={loading}
               className="w-full sm:w-auto"
             >
-              {loading ? "Submitting..." : "Submit Expense"}
+              {loading ? "Submitting..." : editingDraftId ? "Update/Submit Draft" : "Submit Expense"}
             </Button>
           </form>
         </Card>
@@ -2744,13 +2750,15 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
               className="text-xl font-semibold text-center mb-4"
               style={{ color: "var(--primary)" }}
             >
-              Save or Submit Expense
+              {editingDraftId ? "Update or Submit Draft" : "Save or Submit Expense"}
             </Dialog.Title>
             <Dialog.Description
               className="text-center text-sm mb-6"
               style={{ color: "var(--foreground)" }}
             >
-              Would you like to save this expense as a draft or submit it for approval?
+              {editingDraftId 
+                ? "Would you like to update this draft or submit it for approval?"
+                : "Would you like to save this expense as a draft or submit it for approval?"}
             </Dialog.Description>
             <div className="flex flex-col gap-3">
               <Button
@@ -2762,7 +2770,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                   border: "2px solid #f59e0b",
                 }}
               >
-                💾 Save as Draft
+                {editingDraftId ? "💾 Update Draft" : "💾 Save as Draft"}
               </Button>
               <Button
                 onClick={handleFinalSubmit}
