@@ -56,14 +56,20 @@ function MainPageContent() {
     const projectId = searchParams.get('projectId');
     const editDraft = searchParams.get('editDraft');
     
+    console.log('URL params:', { tab, projectId, editDraft });
+    
     if (tab === 'project' && projectId) {
+      console.log('Switching to project tab');
       setActiveTab('project');
       setSelectedProjectId(projectId);
     } else if (editDraft) {
       // When editing a draft, switch to the 'add' tab
+      console.log('Editing draft, switching to add tab:', editDraft);
       setActiveTab('add');
       // Scroll to top to ensure the form is visible
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   }, [searchParams]);
 

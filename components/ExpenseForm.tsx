@@ -790,20 +790,28 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
 
       safeSetState(() => setShowLoadingModal(false));
       safeSetState(() => setShowSubmitModal(false));
-      safeSetState(() => setToastMessage(editingDraftId ? "Draft updated successfully" : "Expense saved as draft successfully"));
-      safeSetState(() => setShowToast(true));
-      setTimeout(() => safeSetState(() => setShowToast(false)), 3000);
       
-      // Clear editing state
-      setEditingDraftId(null);
-      setExistingBillImages([]);
-
-      // Delay before navigating to prevent state updates after unmount
-      setTimeout(() => {
-        if (mounted.current) {
-          router.push("/");
-        }
-      }, 2000);
+      // Show success modal for draft
+      safeSetState(() => setSubmittedExpenseInfo({
+        total: total,
+        attachmentCount: proofUrls.length,
+        category: 'draft',
+      }));
+      safeSetState(() => setShowSuccessModal(true));
+      
+      // Clear the form and editing state
+      if (mounted.current) {
+        safeSetState(() => setForm(initialState));
+        setEditingDraftId(null);
+        setExistingBillImages([]);
+        
+        // Delay before closing modal and optionally navigating
+        setTimeout(() => {
+          if (mounted.current) {
+            closeSuccessModal();
+          }
+        }, 2500);
+      }
     } catch (err: any) {
       console.error("Draft save error:", err);
       safeSetState(() => setShowLoadingModal(false));
@@ -1260,16 +1268,19 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
       safeSetState(() => setShowSuccessModal(true));
 
       if (mounted.current) {
-        // Modal is shown, reset form and navigate after delay
+        // Reset form immediately
         safeSetState(() => setForm(initialState));
+        setEditingDraftId(null);
+        setExistingBillImages([]);
+        
         if (typeof props.onExpenseAdded === "function") props.onExpenseAdded();
 
-        // Delay navigation to prevent state updates after unmount
+        // Auto-close modal after delay
         setTimeout(() => {
           if (mounted.current) {
             closeSuccessModal();
           }
-        }, 2000);
+        }, 2500);
       }
     } catch (err: any) {
       console.error("Expense submit error:", err);
@@ -1541,7 +1552,7 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
   const closeSuccessModal = () => {
     safeSetState(() => setShowSuccessModal(false));
     safeSetState(() => setSubmittedExpenseInfo(null));
-    router.push("/");
+    // Don't navigate away - let user add another expense
   };
 
   const closeErrorModal = () => {
@@ -2822,15 +2833,19 @@ export default function ExpenseForm(props: { onExpenseAdded?: () => void }) {
                 className="text-2xl font-semibold text-center mb-2"
                 style={{ color: "var(--primary)" }}
               >
-                Expense Submitted!
+                {submittedExpenseInfo?.category === "draft" 
+                  ? "Draft Saved Successfully!" 
+                  : "Expense Submitted!"}
               </Dialog.Title>
               <Dialog.Description
                 className="text-center text-base mb-4"
                 style={{ color: "var(--foreground)" }}
               >
-                {submittedExpenseInfo?.category === "personal" 
-                  ? "Your personal expense has been saved to your tracking" 
-                  : "Your expense has been successfully submitted for review"}
+                {submittedExpenseInfo?.category === "draft"
+                  ? "Your expense has been saved as a draft. You can edit or submit it later."
+                  : submittedExpenseInfo?.category === "personal" 
+                    ? "Your personal expense has been saved to your tracking" 
+                    : "Your expense has been successfully submitted for review"}
               </Dialog.Description>
               
               {/* Expense Details */}

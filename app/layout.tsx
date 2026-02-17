@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../context/AuthContext";
 import OfflineIndicator from "../components/OfflineIndicator";
 import ErrorBoundary from "../components/ErrorBoundary";
 
-const geistSans = Geist({
+// Using system fonts instead of Google Fonts to avoid build issues
+const fontSans = {
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+  style: {
+    fontFamily:
+      'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  },
+};
 
-const geistMono = Geist_Mono({
+const fontMono = {
   variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  style: {
+    fontFamily:
+      '"SF Mono", Monaco, Inconsolata, "Roboto Mono", Consolas, "Courier New", monospace',
+  },
+};
 
 export const metadata: Metadata = {
   title: "Panache Green Expense Tracker",
@@ -69,17 +75,18 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#22c55e" />
         <meta name="msapplication-TileImage" content="/icon-144x144.png" />
-        <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, user-scalable=no, viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, user-scalable=no, viewport-fit=cover"
+        />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${fontSans.variable} ${fontMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
         <ErrorBoundary>
           <OfflineIndicator />
-          <ThemeProvider>
-          {children}
-          </ThemeProvider>
+          <ThemeProvider>{children}</ThemeProvider>
         </ErrorBoundary>
       </body>
     </html>

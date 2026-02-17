@@ -116,7 +116,9 @@ export default function ExpenseTable() {
     // Store draft data in sessionStorage to pre-populate form
     sessionStorage.setItem('draftExpenseData', JSON.stringify(draft));
     console.log('Draft data stored in sessionStorage');
-    router.push('/?editDraft=' + draft.id);
+    
+    // Navigate with a full page reload to ensure form loads
+    window.location.href = '/?editDraft=' + draft.id;
   };
 
   // Calculate spending statistics
